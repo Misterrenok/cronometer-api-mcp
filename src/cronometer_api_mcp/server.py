@@ -416,7 +416,7 @@ def get_nutrition_scores(date: str | None = None) -> str:
         "openWorldHint": True,
     }
 )
-def search_foods(query: str) -> str:
+def search_foods(query: str, limit: int = 15) -> str:
     """Search Cronometer's food database by name.
 
     Returns matching foods with their IDs and source information.
@@ -425,10 +425,17 @@ def search_foods(query: str) -> str:
 
     Args:
         query: Food name or keyword (e.g. "eggs", "chicken breast").
+        limit: Max results to return (default 15, capped at 50). Raise it
+            only if the food you need is missing from the first page.
     """
     try:
         client = _get_client()
         foods = client.search_food(query)
+        total_matches = len(foods)
+
+        # Results come back relevance-sorted; keep the head to stay compact
+        limit = max(1, min(limit, 50))
+        foods = foods[:limit]
 
         # Slim down results to the most useful fields
         results = []
@@ -449,6 +456,8 @@ def search_foods(query: str) -> str:
             {
                 "query": query,
                 "count": len(results),
+                "total_matches": total_matches,
+                "truncated": total_matches > len(results),
                 "foods": results,
             }
         )
