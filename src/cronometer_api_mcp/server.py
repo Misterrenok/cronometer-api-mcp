@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from datetime import date, timedelta
 
 from mcp.server.fastmcp import FastMCP
@@ -21,7 +22,20 @@ mcp = FastMCP(
         "and serving sizes, add_food_entry to log meals, and get_food_log to "
         "review what was eaten."
     ),
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", "8080")),
+    streamable_http_path="/mcp",
+    stateless_http=True,
+    json_response=True,
 )
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(_request):
+    """Simple Railway health check."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"status": "ok"})
 
 _client: CronometerClient | None = None
 
@@ -794,37 +808,24 @@ def date_module_today() -> date:
 
 
 # ------------------------------------------------------------------
-# Entrypoint (stdio only)
+# Entrypoint: native Streamable HTTP (no supergateway)
 # ------------------------------------------------------------------
 
 
 def main():
-    """Run the MCP server over stdio.
-
-    stdio is the only supported transport. For remote/hosted use the
-    stdio process is wrapped by supergateway (see Dockerfile), which owns
-    the HTTP listener; any HTTP exposure must sit behind an authenticating
-    gateway/proxy.
-    """
-    # Load .env for local development (credentials). No-op if the file is
-    # missing. override=False keeps real environment variables (Docker,
-    # systemd, MCP client `env` blocks, etc.) authoritative over .env.
+    """Run the MCP server directly over Streamable HTTP."""
+    # Load .env for local development. Railway variables remain authoritative.
     from dotenv import find_dotenv, load_dotenv
 
     dotenv_path = find_dotenv(usecwd=True)
     if dotenv_path and load_dotenv(dotenv_path, override=False):
         logger.info("Loaded .env from %s", dotenv_path)
 
-    import os
-
-mcp.run(
-    transport="streamable-http",
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", "8080")),
-    streamable_http_path="/mcp",
-    stateless_http=True,
-    json_response=True,
-)
+    logger.info(
+        "Starting Cronometer MCP on http://0.0.0.0:%s/mcp",
+        mcp.settings.port,
+    )
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
