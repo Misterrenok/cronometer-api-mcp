@@ -64,10 +64,4 @@ RUN cd /usr/local/lib/node_modules/supergateway \
 # --stateful enables Mcp-Session-Id semantics per the MCP streamable-HTTP spec.
 # --sessionTimeout is unused here because gateway owns reaping via Nomad;
 #   we still set a generous value so a forgotten session eventually self-heals.
-ENTRYPOINT ["/bin/sh", "-c", "exec supergateway \
-  --stdio 'cronometer-api-mcp' \
-  --outputTransport streamableHttp \
-  --streamableHttpPath /mcp \
-  --healthEndpoint /healthz \
-  --port \"${PORT}\" \
-  --logLevel info"]
+ENTRYPOINT ["cronometer-api-mcp"]
