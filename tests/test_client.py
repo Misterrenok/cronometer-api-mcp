@@ -124,6 +124,59 @@ def test_stale_cache_file_is_removed_on_failure(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Cold-start auth ordering (issues #30 / #31)
+#
+# On a client that hasn't logged in yet, add_serving() must not embed a null
+# userId: reading identity has to trigger login first, so the payload is
+# correct on the first attempt and the retry never re-sends stale state.
+# ---------------------------------------------------------------------------
+
+
+def make_cold_client(tmp_path: Path, responses: list[dict]):
+    """Like make_client but starts unauthenticated and records posted payloads."""
+    client = CronometerClient(session_path=tmp_path / "session.json")
+    client._user_id = None
+    client._token = None
+
+    state = {"login": 0, "post": 0, "payloads": []}
+
+    def fake_login() -> None:
+        state["login"] += 1
+        client._user_id = 42
+        client._token = f"FRESH_TOKEN_{state['login']}"
+
+    def fake_post(endpoint, json=None):
+        state["payloads"].append(json)
+        idx = state["post"]
+        state["post"] += 1
+        body = responses[min(idx, len(responses) - 1)]
+        return FakeResp(body)
+
+    client.login = fake_login  # type: ignore[method-assign]
+    client._http.post = fake_post  # type: ignore[method-assign]
+    return client, state
+
+
+def test_add_serving_cold_start_embeds_real_user_id(tmp_path):
+    """First write on a cold client logs in once and sends the real userId."""
+    client, state = make_cold_client(tmp_path, [{"result": "SUCCESS", "id": 7}])
+
+    client.add_serving(food_id=1, measure_id=0, grams=100.0)
+
+    assert state["login"] == 1
+    assert state["post"] == 1  # no stale-payload double failure (#31)
+    assert state["payloads"][0]["serving"]["userId"] == 42
+
+
+def test_user_id_property_triggers_login(tmp_path):
+    """Reading user_id on a cold client authenticates and returns the real id."""
+    client, state = make_cold_client(tmp_path, [{"result": "SUCCESS"}])
+
+    assert client.user_id == 42
+    assert state["login"] == 1
+
+
+# ---------------------------------------------------------------------------
 # Diary enrichment (get_food_log food names / per-entry nutrients)
 # ---------------------------------------------------------------------------
 
@@ -151,6 +204,13 @@ SAMPLE_DIARY = {
             "grams": 50,
             "order": 65538,
         },
+        {
+            "type": "Serving",
+            "foodId": 300,
+            "measureId": 30,
+            "grams": 1.1,  # Recipe: "grams" is a serving count, not grams
+            "order": 65539,
+        },
         {"type": "Exercise", "name": "Running", "order": 1},
     ]
 }
@@ -173,6 +233,18 @@ SAMPLE_FOODS = [
         "defaultMeasureId": 20,
         "measures": [{"id": 20, "name": "glass", "value": 244.0}],
         "nutrients": [{"id": 208, "amount": 42.0}],
+    },
+    {
+        "id": 300,
+        "name": "Recipe Food",
+        "source": "Custom",
+        "defaultMeasureId": 30,
+        "measures": [
+            {"id": 30, "name": "serving", "value": 1, "amount": 1, "type": "Recipe"},
+            {"id": 31, "name": "g", "value": 233.4, "amount": 1, "type": "Recipe"},
+        ],
+        # stored per one reference serving (not per-100g)
+        "nutrients": [{"id": 208, "amount": 708.538}, {"id": 203, "amount": 56.03}],
     },
 ]
 
@@ -215,8 +287,19 @@ def test_enrich_diary_merges_names_measures_and_scaled_nutrients(tmp_path):
     # 42 kcal/100g scaled to 50g -> 21
     assert next(n for n in milk["nutrients"] if n["id"] == 208)["amount"] == 21.0
 
+    recipe = entries[2]
+    assert recipe["name"] == "Recipe Food"
+    assert recipe["measure"]["measure_id"] == 30
+    assert recipe["measure"]["name"] == "serving"
+    # Recipe measure: nutrients are per-serving and "grams" is a serving count,
+    # so 708.538 kcal/serving * 1.1 servings -> 779.39 (not grams/100)
+    energy = next(n for n in recipe["nutrients"] if n["id"] == 208)
+    assert energy["amount"] == 779.3918
+    protein = next(n for n in recipe["nutrients"] if n["id"] == 203)
+    assert protein["amount"] == 61.633
+
     # Non-Serving entry untouched
-    assert entries[2] == {"type": "Exercise", "name": "Running", "order": 1}
+    assert entries[3] == {"type": "Exercise", "name": "Running", "order": 1}
 
 
 def test_enrich_diary_is_best_effort_when_get_foods_fails(tmp_path):
