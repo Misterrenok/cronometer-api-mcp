@@ -67,9 +67,7 @@ RUN cd /usr/local/lib/node_modules/supergateway \
 ENTRYPOINT ["/bin/sh", "-c", "exec supergateway \
   --stdio 'cronometer-api-mcp' \
   --outputTransport streamableHttp \
-  --stateful \
   --streamableHttpPath /mcp \
   --healthEndpoint /healthz \
   --port \"${PORT}\" \
-  --sessionTimeout 3600000 \
   --logLevel info"]
