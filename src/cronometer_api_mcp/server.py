@@ -815,7 +815,16 @@ def main():
     if dotenv_path and load_dotenv(dotenv_path, override=False):
         logger.info("Loaded .env from %s", dotenv_path)
 
-    mcp.run(transport="stdio")
+    import os
+
+mcp.run(
+    transport="streamable-http",
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", "8080")),
+    streamable_http_path="/mcp",
+    stateless_http=True,
+    json_response=True,
+)
 
 
 if __name__ == "__main__":
