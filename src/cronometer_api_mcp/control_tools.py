@@ -57,6 +57,32 @@ def _find_serving(client, entry_id: str, day: date) -> dict:
     raise ValueError(f"Food entry {entry_id!r} was not found on {day.isoformat()}.")
 
 
+def _measure_quantity_to_api_amount(measure: dict, quantity: float) -> float:
+    """Convert a human serving quantity into Cronometer's diary amount field.
+
+    Weight/Atomic measures use real grams. Recipe diary rows are different:
+    Cronometer stores the reference-serving count in the field named ``grams``.
+    The confirmed recipe representation has a reference measure with value=1.
+    Non-reference Recipe measure conversion is intentionally rejected until its
+    private API semantics are confirmed, rather than risking a bad diary write.
+    """
+    value = measure.get("value")
+    if not isinstance(value, (int, float)) or value <= 0:
+        raise ValueError(
+            f"Measure {measure.get('id')} has no usable value: {value!r}"
+        )
+
+    if measure.get("type") == "Recipe":
+        if float(value) != 1.0:
+            raise ValueError(
+                "This non-reference Recipe measure cannot be converted safely. "
+                "Use the recipe's reference serving measure (value=1)."
+            )
+        return float(quantity)
+
+    return float(quantity) * float(value)
+
+
 def _copy_serving(
     client,
     entry: dict,
@@ -106,9 +132,11 @@ def add_food_entry_by_measure(
 ) -> str:
     """Log a food using a Cronometer serving measure instead of manual grams.
 
-    This resolves the chosen measure from get_food_details and converts a
-    human-sized quantity such as 2 eggs or 1.5 cups into the gram amount
-    expected by Cronometer using the measure's grams-per-unit value.
+    Weight/Atomic measures convert quantity through their grams-per-unit value.
+    Recipe entries use Cronometer's reference-serving count instead of physical
+    grams; confirmed reference Recipe measures (value=1) therefore pass the
+    quantity directly. Non-reference Recipe measures are rejected rather than
+    guessed.
 
     Args:
         food_id: Cronometer food ID.
@@ -140,13 +168,9 @@ def add_food_entry_by_measure(
                 f"Available measures: {available}"
             )
 
+        api_amount = _measure_quantity_to_api_amount(measure, quantity)
         measure_type = measure.get("type")
-        grams_per_unit = measure.get("value")
-        if not isinstance(grams_per_unit, (int, float)) or grams_per_unit <= 0:
-            raise ValueError(
-                f"Measure {measure_id} has no usable gram weight: {grams_per_unit!r}"
-            )
-        api_amount = float(quantity) * float(grams_per_unit)
+        measure_value = measure.get("value")
 
         result = client.add_serving(
             food_id=food_id,
@@ -165,10 +189,13 @@ def add_food_entry_by_measure(
                     "measure_id": measure_id,
                     "name": measure.get("name"),
                     "type": measure_type,
-                    "grams_per_unit": grams_per_unit,
+                    "value": measure_value,
                 },
                 "quantity": quantity,
                 "api_amount": api_amount,
+                "api_amount_kind": (
+                    "recipe_servings" if measure_type == "Recipe" else "grams"
+                ),
                 "date": date or str(client.today()),
                 "diary_group": diary_group.strip().lower(),
             }
