@@ -42,16 +42,19 @@ def test_server_identity():
 
 
 def test_registered_tools():
-    """Tools register as an import side effect of the @mcp.tool() decorators.
+    """Core tools register as an import side effect of @mcp.tool decorators.
 
-    Descriptions come from the docstrings and are what the model reads to pick
-    a tool, so an empty one is a silent regression.
+    Extension modules share the same FastMCP instance and may already have
+    registered extra tools earlier in the pytest process, so assert that all
+    core tools are present rather than requiring the global registry to contain
+    only the core set.
     """
     from cronometer_api_mcp.server import mcp
 
     tools = asyncio.run(mcp.list_tools())
+    names = {tool.name for tool in tools}
 
-    assert {tool.name for tool in tools} == EXPECTED_TOOLS
+    assert EXPECTED_TOOLS <= names
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
