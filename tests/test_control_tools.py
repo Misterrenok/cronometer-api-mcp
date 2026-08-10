@@ -16,7 +16,7 @@ class FakeClient:
             "name": "Test Food",
             "measures": [
                 {"id": 7, "name": "large", "value": 50.0, "type": "Atomic"},
-                {"id": 8, "name": "serving", "value": 1.0, "type": "Recipe"},
+                {"id": 8, "name": "portion", "value": 240.0, "type": "Recipe"},
             ],
         }
         self.diary = {"diary": []}
@@ -95,7 +95,7 @@ def test_add_food_entry_by_measure_converts_quantity(monkeypatch):
     assert call["diary_group"] == 1
 
 
-def test_add_food_entry_by_measure_recipe_uses_serving_count(monkeypatch):
+def test_add_food_entry_by_measure_recipe_uses_gram_weight(monkeypatch):
     from cronometer_api_mcp import control_tools
 
     client = FakeClient()
@@ -110,7 +110,8 @@ def test_add_food_entry_by_measure_recipe_uses_serving_count(monkeypatch):
     )
 
     assert result["status"] == "success"
-    assert client.add_calls[0]["grams"] == 1.5
+    assert result["api_amount"] == 360.0
+    assert client.add_calls[0]["grams"] == 360.0
 
 
 def test_copy_food_entry_preserves_meal_group(monkeypatch):
