@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cronometer-api-mcp = "cronometer_api_mcp.server_ext:main"
+cronometer-api-mcp = "cronometer_api_mcp.server_all:main"
 
 [dependency-groups]
 dev = [

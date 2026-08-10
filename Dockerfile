@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
-RUN uv sync --frozen --no-dev --compile-bytecode
+RUN uv sync --frozen --no-dev --compile-bytecode \
+    && uv pip install "cronometer-mcp==2.0.3"
 
 EXPOSE 8080
 
