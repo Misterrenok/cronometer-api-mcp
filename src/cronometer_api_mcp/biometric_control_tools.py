@@ -12,7 +12,11 @@ mcp = core.mcp
 _SUPPORTED = {"weight", "blood_glucose", "heart_rate", "body_fat"}
 
 
-def _prepare_value(metric_type: str, value: float, unit: str | None) -> tuple[float, str | None]:
+def _prepare_value(
+    metric_type: str,
+    value: float,
+    unit: str | None,
+) -> tuple[float, str | None]:
     metric = metric_type.strip().lower()
     if metric not in _SUPPORTED:
         raise ValueError(
