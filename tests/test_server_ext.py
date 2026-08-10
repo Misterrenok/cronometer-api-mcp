@@ -42,6 +42,14 @@ EXPORT_TOOLS = {
     "get_biometrics_export",
 }
 
+CONTROL_TOOLS = {
+    "add_food_entry_by_measure",
+    "copy_food_entry",
+    "move_food_entry",
+    "copy_meal_between_dates",
+    "clear_food_entries",
+}
+
 
 def test_full_server_registers_all_tools():
     from cronometer_api_mcp.server_all import mcp
@@ -52,7 +60,8 @@ def test_full_server_registers_all_tools():
     assert EXTRA_TOOLS <= names
     assert HYBRID_TOOLS <= names
     assert EXPORT_TOOLS <= names
-    assert len(names) == 43
+    assert CONTROL_TOOLS <= names
+    assert len(names) == 48
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
