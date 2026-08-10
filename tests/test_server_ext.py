@@ -35,6 +35,13 @@ HYBRID_TOOLS = {
     "cancel_active_fast",
 }
 
+EXPORT_TOOLS = {
+    "export_raw_csv_web",
+    "get_exercises_export",
+    "get_notes_export",
+    "get_biometrics_export",
+}
+
 
 def test_full_server_registers_all_tools():
     from cronometer_api_mcp.server_all import mcp
@@ -44,7 +51,8 @@ def test_full_server_registers_all_tools():
 
     assert EXTRA_TOOLS <= names
     assert HYBRID_TOOLS <= names
-    assert len(names) == 39
+    assert EXPORT_TOOLS <= names
+    assert len(names) == 43
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 

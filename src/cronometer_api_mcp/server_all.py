@@ -1,7 +1,8 @@
-"""Full Cronometer MCP entrypoint: mobile REST tools plus confirmed web writes."""
+"""Full Cronometer MCP entrypoint: mobile REST tools plus confirmed web tools."""
 
 from . import server_ext as extended
 from . import hybrid_tools as _hybrid_tools  # noqa: F401
+from . import export_tools as _export_tools  # noqa: F401
 
 mcp = extended.mcp
 
