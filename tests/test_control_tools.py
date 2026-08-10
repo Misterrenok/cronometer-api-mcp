@@ -157,6 +157,33 @@ def test_move_food_entry_adds_before_delete(monkeypatch):
     assert client.delete_calls == [(["old"], date(2026, 8, 9))]
 
 
+def test_move_food_entry_preserves_created_entry_when_delete_raises(monkeypatch):
+    from cronometer_api_mcp import control_tools
+
+    client = FakeClient()
+    client.diary = {"diary": [_serving("old", meal_group=2)]}
+
+    def fail_delete(entry_ids: list[str], day: date) -> dict:
+        raise RuntimeError("delete failed")
+
+    client.delete_entries = fail_delete
+    monkeypatch.setattr(control_tools.core, "_get_client", lambda: client)
+
+    result = _payload(
+        control_tools.move_food_entry(
+            entry_id="old",
+            source_date="2026-08-09",
+            destination_date="2026-08-10",
+            diary_group="dinner",
+        )
+    )
+
+    assert result["status"] == "partial"
+    assert result["source_entry_id"] == "old"
+    assert result["destination_entry"] == {"id": "new-1"}
+    assert result["remove_error"] == "RuntimeError: delete failed"
+
+
 def test_copy_meal_between_dates_copies_only_selected_food_group(monkeypatch):
     from cronometer_api_mcp import control_tools
 
