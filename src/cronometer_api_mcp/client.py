@@ -134,7 +134,7 @@ class CronometerClient:
         """
         try:
             raw = self._session_path.read_text()
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             return
         try:
             data = json.loads(raw)
@@ -389,7 +389,7 @@ class CronometerClient:
             return None
         try:
             ZoneInfo(name)
-        except ZoneInfoNotFoundError, ValueError:
+        except (ZoneInfoNotFoundError, ValueError):
             logger.warning(
                 "Ignoring invalid %s=%r (not a known IANA timezone)",
                 _ACCOUNT_TZ_ENV,
@@ -423,7 +423,7 @@ class CronometerClient:
         name = self._timezone or _DEFAULT_TIMEZONE
         try:
             return ZoneInfo(name)
-        except ZoneInfoNotFoundError, ValueError:
+        except (ZoneInfoNotFoundError, ValueError):
             logger.warning(
                 "Unknown account timezone %r; falling back to %s",
                 name,
@@ -947,7 +947,9 @@ class CronometerClient:
         )
         return {"macros": macros, "nutrients": nutrients}
 
-    def enrich_diary_servings(self, diary: dict) -> dict:
+    def enrich_diary_servings(
+        self, diary: dict, *, include_nutrients: bool = True
+    ) -> dict:
         """Merge food metadata into a raw get_diary payload (best-effort).
 
         Diary "Serving" entries carry only numeric IDs (foodId, measureId,
@@ -958,10 +960,14 @@ class CronometerClient:
           - measure: {measure_id, name, grams_per_unit} for the entry's
             measureId (falls back to the food's defaultMeasureId)
           - servings: grams / grams_per_unit, when derivable
-          - nutrients: the food's nutrient profile scaled to the entry's amount
-            (per-100g for Weight/Atomic measures, per-serving for Recipe
-            measures), labeled with name/unit/category via the nutrient
-            definitions catalog
+          - nutrients (optional): the food's nutrient profile scaled to the
+            entry's amount (per-100g for Weight/Atomic measures, per-serving
+            for Recipe measures), labeled with name/unit/category via the
+            nutrient definitions catalog
+
+        Set include_nutrients=False for compact diary listings. This avoids a
+        nutrient-catalog request and prevents very large MCP responses while
+        still resolving food names and serving measures.
 
         Enrichment is best-effort: if the get_foods call fails or a food is not
         returned, the corresponding entries are left unchanged. The diary dict
@@ -993,10 +999,12 @@ class CronometerClient:
             return diary
 
         food_by_id = {f.get("id"): f for f in foods if isinstance(f, dict)}
-        try:
-            defs = self.get_nutrient_definitions()
-        except Exception:
-            defs = {}
+        defs: dict[int, dict] = {}
+        if include_nutrients:
+            try:
+                defs = self.get_nutrient_definitions()
+            except Exception:
+                defs = {}
 
         for entry in entries:
             if not isinstance(entry, dict) or entry.get("type") != "Serving":
@@ -1037,7 +1045,7 @@ class CronometerClient:
             #     scale by grams directly.
             #   - Weight/Atomic measures: nutrients are stored per-100g and
             #     "grams" is real grams, so scale by grams / 100.
-            if isinstance(grams, (int, float)):
+            if include_nutrients and isinstance(grams, (int, float)):
                 if measure and measure.get("type") == "Recipe":
                     scale = grams
                 else:
@@ -1062,7 +1070,11 @@ class CronometerClient:
                     )
                 entry["nutrients"] = scaled
 
-        logger.info("Enriched %d diary foods with names/nutrients", len(food_by_id))
+        logger.info(
+            "Enriched %d diary foods%s",
+            len(food_by_id),
+            " with nutrients" if include_nutrients else " (compact metadata only)",
+        )
         return diary
 
     # ------------------------------------------------------------------

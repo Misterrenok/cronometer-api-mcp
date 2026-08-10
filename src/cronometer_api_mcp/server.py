@@ -81,6 +81,90 @@ def _err(e: Exception) -> str:
 
     return json.dumps({"status": "error", "message": msg})
 
+def _compact_diary_entries(data: dict) -> list[dict]:
+    """Return a compact, MCP-friendly diary representation.
+
+    The raw Cronometer diary is intentionally verbose. Returning it together
+    with a full per-entry nutrient profile can produce very large MCP payloads
+    that are slow or get truncated by clients. This helper keeps the fields an
+    assistant needs for normal diary work while preserving serving IDs for
+    safe deletion.
+    """
+    entries = (data or {}).get("diary") or []
+    if not isinstance(entries, list):
+        return []
+
+    meal_names = {1: "breakfast", 2: "lunch", 3: "dinner", 4: "snacks"}
+    compact: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+
+        entry_type = entry.get("type")
+        item: dict = {"type": entry_type}
+
+        serving_id = entry.get("servingId")
+        if serving_id is not None:
+            item["entry_id"] = str(serving_id)
+
+        if entry.get("name") is not None:
+            item["name"] = entry.get("name")
+
+        if entry_type == "Serving":
+            for source_key, dest_key in (
+                ("foodId", "food_id"),
+                ("measureId", "measure_id"),
+                ("source", "source"),
+                ("category", "category"),
+                ("grams", "grams"),
+                ("servings", "servings"),
+                ("time", "time"),
+            ):
+                value = entry.get(source_key)
+                if value is not None:
+                    item[dest_key] = value
+
+            measure = entry.get("measure")
+            if isinstance(measure, dict):
+                item["measure"] = measure
+
+            order = entry.get("order")
+            if isinstance(order, int):
+                group = order >> 16
+                if group in meal_names:
+                    item["meal"] = meal_names[group]
+        else:
+            # Keep a few useful fields for exercise/biometric/other diary rows
+            # without echoing the entire raw API object.
+            for key in ("value", "unit", "time", "duration", "calories"):
+                if entry.get(key) is not None:
+                    item[key] = entry.get(key)
+
+        compact.append(item)
+
+    return compact
+
+
+def _normalise_daily_macro_targets(summary: dict) -> dict:
+    """Extract effective daily macro targets from get_diary's summary block."""
+    raw = (summary or {}).get("macros") or {}
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def pick(*keys: str):
+        for key in keys:
+            if key in raw and raw[key] is not None:
+                return raw[key]
+        return None
+
+    return {
+        "energy_kcal": pick("energy", "calories", "kcal"),
+        "protein_g": pick("protein", "protein_g"),
+        "fat_g": pick("fat", "fat_g"),
+        "carbs_g": pick("net_carbs", "netCarbs", "carbs", "carbohydrates"),
+        "raw": raw,
+    }
+
 
 # ------------------------------------------------------------------
 # Diary: read
@@ -95,68 +179,62 @@ def _err(e: Exception) -> str:
         "openWorldHint": True,
     }
 )
-def get_food_log(date: str | None = None) -> str:
-    """Get all diary entries for a given date.
+def get_food_log(
+    date: str | None = None,
+    include_nutrition: bool = False,
+) -> str:
+    """Get a compact diary for a given date.
 
-    Returns every food entry logged for the day. Each "Serving" entry is
-    enriched (best-effort) with the food's name, source, the serving measure
-    (unit name and grams per unit), the number of servings, and that food's
-    own nutrient profile scaled to the amount eaten. Non-food entries
-    (exercise, biometrics) carry their own name.
+    The default response is intentionally small and contains each diary row's
+    name, amount/serving information, meal slot and entry ID. It does *not*
+    include a full nutrient profile for every individual food; use
+    get_food_details for a food's nutrient profile.
 
-    Note: the per-entry "nutrients" are each food's individual contribution,
-    which is distinct from the day-level nutrition_summary aggregate below.
+    Set include_nutrition=True when day-level macro/micronutrient totals are
+    needed in the same response. For the most compact workflow, call
+    get_daily_nutrition separately only when those totals are actually needed.
 
-    Also returns a top-level energy_summary field with pre-computed
-    values most relevant to the user:
-
-      - total_target_kcal: daily calorie target dynamically adjusted
-        for expenditure and weight goal (equivalent to Cronometer's
-        "Total Target" in the Energy Summary screen)
-      - consumed_kcal: total calories consumed
-      - remaining_kcal: calories remaining to stay on target
-        (total_target_kcal - consumed_kcal). Always report this
-        when summarizing the user's day. Prefer this over manually
-        deriving values from the burn breakdown fields.
-
-    Also returns a nutrition_summary field with consumed totals for every
-    nutrient the user tracks in Cronometer (macros plus any tracked
-    micronutrients such as saturated fat, cholesterol, or omega-3/6):
-
-      - macros: flat macro totals (energy, protein, carbs, net_carbs, fat,
-        fiber, alcohol)
-      - nutrients: the full list of tracked nutrients with amounts and units
+    The response always includes energy_summary when Cronometer supplies the
+    relevant values:
+      - total_target_kcal
+      - consumed_kcal
+      - remaining_kcal
 
     Args:
         date: Date as YYYY-MM-DD (defaults to today).
+        include_nutrition: Include full day-level tracked nutrients. Defaults
+            to False to keep the MCP response small.
     """
     try:
         client = _get_client()
         day = _parse_date(date)
         data = client.get_diary(day)
-        data = client.enrich_diary_servings(data)
+        # Resolve names/measures with one batch food call, but deliberately do
+        # not attach every nutrient to every diary row.
+        data = client.enrich_diary_servings(data, include_nutrients=False)
 
         summary = (data or {}).get("summary") or {}
         target = (summary.get("macros") or {}).get("energy")
         consumed = (summary.get("consumed") or {}).get("total")
         energy_summary: dict | None = None
-        if target is not None and consumed is not None:
+        if isinstance(target, (int, float)) and isinstance(consumed, (int, float)):
             energy_summary = {
                 "total_target_kcal": target,
                 "consumed_kcal": consumed,
-                "remaining_kcal": int(round(target - consumed)),
+                "remaining_kcal": round(target - consumed, 1),
             }
 
-        nutrition_summary = client.get_consumed_nutrients(day)
+        entries = _compact_diary_entries(data)
+        payload: dict = {
+            "date": date or str(client.today()),
+            "energy_summary": energy_summary,
+            "count": len(entries),
+            "entries": entries,
+        }
+        if include_nutrition:
+            payload["nutrition_summary"] = client.get_consumed_nutrients(day)
 
-        return _ok(
-            {
-                "date": date or str(date_module_today()),
-                "energy_summary": energy_summary,
-                "nutrition_summary": nutrition_summary,
-                "diary": data,
-            }
-        )
+        return _ok(payload)
     except Exception as e:
         return _err(e)
 
@@ -613,20 +691,46 @@ def add_custom_food(
         "openWorldHint": True,
     }
 )
-def get_macro_targets() -> str:
-    """Get current macro targets including weekly schedule and templates.
+def get_macro_targets(date: str | None = None) -> str:
+    """Get effective macro targets for a date plus saved schedules/templates.
 
-    Returns the weekly macro schedule (which template applies to each day)
-    and all saved macro target templates with their values.
+    The mobile API's schedule/template endpoints can legitimately be empty even
+    when Cronometer has active targets. To avoid returning a misleading empty
+    result, this tool also reads the diary summary and exposes the effective
+    daily targets Cronometer is actually applying for the requested date.
+
+    Args:
+        date: Date as YYYY-MM-DD (defaults to today).
     """
     try:
         client = _get_client()
-        schedules = client.get_macro_schedules()
-        templates = client.get_macro_target_templates()
+        day = _parse_date(date)
+
+        diary = client.get_diary(day)
+        summary = (diary or {}).get("summary") or {}
+        daily_targets = _normalise_daily_macro_targets(summary)
+
+        warnings: list[str] = []
+        try:
+            schedules = client.get_macro_schedules()
+        except Exception as exc:
+            schedules = None
+            warnings.append(f"Could not read weekly macro schedules: {type(exc).__name__}")
+
+        try:
+            templates = client.get_macro_target_templates()
+        except Exception as exc:
+            templates = None
+            warnings.append(f"Could not read saved macro templates: {type(exc).__name__}")
+
         return _ok(
             {
+                "date": date or str(client.today()),
+                "daily_targets": daily_targets,
+                # Keep the original raw fields for backwards compatibility.
                 "schedules": schedules,
                 "templates": templates,
+                "warnings": warnings,
             }
         )
     except Exception as e:
