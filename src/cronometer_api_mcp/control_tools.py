@@ -288,7 +288,25 @@ def move_food_entry(
             )
 
         created = _copy_serving(client, entry, destination, destination_group)
-        removed = client.delete_entries([str(entry_id)], source)
+        try:
+            removed = client.delete_entries([str(entry_id)], source)
+        except Exception as exc:
+            return json.dumps(
+                {
+                    "status": "partial",
+                    "message": (
+                        "Destination entry was created, but removing the source entry "
+                        "raised an error. Both entries may now exist."
+                    ),
+                    "source_entry_id": str(entry_id),
+                    "source_date": source_date,
+                    "destination_date": destination_date,
+                    "destination_entry": created,
+                    "remove_error": f"{type(exc).__name__}: {exc}",
+                },
+                indent=2,
+            )
+
         removed_ids = [str(value) for value in removed.get("removed", [])]
         if str(entry_id) not in removed_ids:
             return json.dumps(
