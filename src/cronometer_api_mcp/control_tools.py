@@ -328,11 +328,12 @@ def copy_meal_between_dates(
     destination_date: str,
     diary_group: str,
 ) -> str:
-    """Copy one complete meal group from one day to another.
+    """Copy all food servings from one meal slot to another date.
 
-    Uses Cronometer's confirmed /api/v2/copy operation with diaryGroupNumber,
-    so only Breakfast, Lunch, Dinner, or Snacks is copied. The operation is
-    additive and does not remove entries already on the destination date.
+    This composes the already-confirmed get_diary and add_serving operations.
+    Only food Serving rows in the selected Breakfast/Lunch/Dinner/Snacks group
+    are copied; exercises, biometrics, and notes are ignored. The operation is
+    additive and leaves the source day untouched.
 
     Args:
         source_date: Source date as YYYY-MM-DD.
@@ -349,22 +350,52 @@ def copy_meal_between_dates(
 
         group = _meal_group(diary_group, allow_auto=False)
         client = core._get_client()
-        result = client._request(
-            "/api/v2/copy",
-            {
-                "from": client._format_day(source),
-                "to": client._format_day(destination),
-                "diaryGroupNumber": group,
-                "config": {"call_version": 1},
-            },
-        )
+        diary = client.get_diary(source)
+        source_entries = [
+            entry
+            for entry in (diary or {}).get("diary", [])
+            if isinstance(entry, dict)
+            and entry.get("type") == "Serving"
+            and _entry_meal_group(entry) == group
+        ]
+
+        copied = []
+        for entry in source_entries:
+            source_entry_id = str(entry.get("servingId"))
+            try:
+                created = _copy_serving(client, entry, destination, group)
+            except Exception as exc:
+                return json.dumps(
+                    {
+                        "status": "partial",
+                        "message": (
+                            "Some meal entries were copied before a later entry failed. "
+                            "The source day was not modified."
+                        ),
+                        "source_date": source_date,
+                        "destination_date": destination_date,
+                        "diary_group": diary_group.strip().lower(),
+                        "copied_count": len(copied),
+                        "copied": copied,
+                        "failed_source_entry_id": source_entry_id,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                    indent=2,
+                )
+            copied.append(
+                {
+                    "source_entry_id": source_entry_id,
+                    "destination_entry": created,
+                }
+            )
+
         return core._ok(
             {
                 "source_date": source_date,
                 "destination_date": destination_date,
                 "diary_group": diary_group.strip().lower(),
-                "diary_group_number": group,
-                "result": result,
+                "copied_count": len(copied),
+                "copied": copied,
             }
         )
     except Exception as e:
