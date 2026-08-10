@@ -48,6 +48,7 @@ CONTROL_TOOLS = {
     "move_food_entry",
     "copy_meal_between_dates",
     "clear_food_entries",
+    "update_food_entry",
 }
 
 
@@ -61,7 +62,7 @@ def test_full_server_registers_all_tools():
     assert HYBRID_TOOLS <= names
     assert EXPORT_TOOLS <= names
     assert CONTROL_TOOLS <= names
-    assert len(names) == 48
+    assert len(names) == 49
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
