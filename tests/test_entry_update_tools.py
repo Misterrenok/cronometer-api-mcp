@@ -52,6 +52,42 @@ def _payload(raw: str) -> dict:
     return json.loads(raw)
 
 
+def _make_recipe(client: FakeClient) -> None:
+    client.food = {
+        "id": 10,
+        "name": "Recipe Food",
+        "measures": [
+            {
+                "id": 30,
+                "name": "serving",
+                "value": 1.0,
+                "amount": 1,
+                "type": "Recipe",
+            },
+            {
+                "id": 31,
+                "name": "g",
+                "value": 233.4,
+                "amount": 1,
+                "type": "Recipe",
+            },
+        ],
+    }
+    client.diary = {
+        "diary": [
+            {
+                "type": "Serving",
+                "servingId": "old",
+                "foodId": 10,
+                "measureId": 30,
+                "grams": 1.1,
+                "translationId": 0,
+                "order": (1 << 16) | 1,
+            }
+        ]
+    }
+
+
 def test_update_food_entry_changes_grams_safely(monkeypatch):
     from cronometer_api_mcp import entry_update_tools
 
@@ -68,6 +104,8 @@ def test_update_food_entry_changes_grams_safely(monkeypatch):
 
     assert result["status"] == "success"
     assert result["updated"] is True
+    assert result["api_amount"] == 125.0
+    assert result["api_amount_kind"] == "grams"
     assert client.add_calls[0]["grams"] == 125.0
     assert client.add_calls[0]["measure_id"] == 7
     assert client.add_calls[0]["day"] == date(2026, 8, 10)
@@ -91,9 +129,75 @@ def test_update_food_entry_quantity_uses_measure_gram_weight(monkeypatch):
     )
 
     assert result["status"] == "success"
-    assert result["grams"] == 480.0
+    assert result["api_amount"] == 480.0
+    assert result["api_amount_kind"] == "grams"
     assert client.add_calls[0]["measure_id"] == 8
     assert client.add_calls[0]["grams"] == 480.0
+
+
+def test_update_food_entry_recipe_quantity_uses_serving_count(monkeypatch):
+    from cronometer_api_mcp import entry_update_tools
+
+    client = FakeClient()
+    _make_recipe(client)
+    monkeypatch.setattr(entry_update_tools.core, "_get_client", lambda: client)
+
+    result = _payload(
+        entry_update_tools.update_food_entry(
+            entry_id="old",
+            source_date="2026-08-10",
+            quantity=1.5,
+        )
+    )
+
+    assert result["status"] == "success"
+    assert result["api_amount"] == 1.5
+    assert result["api_amount_kind"] == "recipe_servings"
+    assert client.add_calls[0]["measure_id"] == 30
+    assert client.add_calls[0]["grams"] == 1.5
+
+
+def test_update_food_entry_recipe_rejects_physical_grams(monkeypatch):
+    from cronometer_api_mcp import entry_update_tools
+
+    client = FakeClient()
+    _make_recipe(client)
+    monkeypatch.setattr(entry_update_tools.core, "_get_client", lambda: client)
+
+    result = _payload(
+        entry_update_tools.update_food_entry(
+            entry_id="old",
+            source_date="2026-08-10",
+            grams=100,
+        )
+    )
+
+    assert result["status"] == "error"
+    assert "serving count" in result["error"]
+    assert not client.add_calls
+    assert not client.delete_calls
+
+
+def test_update_food_entry_recipe_rejects_unconfirmed_measure(monkeypatch):
+    from cronometer_api_mcp import entry_update_tools
+
+    client = FakeClient()
+    _make_recipe(client)
+    monkeypatch.setattr(entry_update_tools.core, "_get_client", lambda: client)
+
+    result = _payload(
+        entry_update_tools.update_food_entry(
+            entry_id="old",
+            source_date="2026-08-10",
+            measure_id=31,
+            quantity=100,
+        )
+    )
+
+    assert result["status"] == "error"
+    assert "non-reference Recipe measure" in result["error"]
+    assert not client.add_calls
+    assert not client.delete_calls
 
 
 def test_update_food_entry_moves_date_and_meal(monkeypatch):
@@ -112,10 +216,34 @@ def test_update_food_entry_moves_date_and_meal(monkeypatch):
     )
 
     assert result["status"] == "success"
+    assert result["api_amount"] == 100.0
     assert client.add_calls[0]["grams"] == 100.0
     assert client.add_calls[0]["day"] == date(2026, 8, 11)
     assert client.add_calls[0]["diary_group"] == 3
     assert client.delete_calls == [(["old"], date(2026, 8, 10))]
+
+
+def test_update_food_entry_moves_recipe_without_reinterpreting_amount(monkeypatch):
+    from cronometer_api_mcp import entry_update_tools
+
+    client = FakeClient()
+    _make_recipe(client)
+    monkeypatch.setattr(entry_update_tools.core, "_get_client", lambda: client)
+
+    result = _payload(
+        entry_update_tools.update_food_entry(
+            entry_id="old",
+            source_date="2026-08-10",
+            destination_date="2026-08-11",
+            diary_group="dinner",
+        )
+    )
+
+    assert result["status"] == "success"
+    assert result["api_amount"] == 1.1
+    assert result["api_amount_kind"] == "preserved_raw_amount"
+    assert client.add_calls[0]["grams"] == 1.1
+    assert client.add_calls[0]["measure_id"] == 30
 
 
 def test_update_food_entry_no_op(monkeypatch):
