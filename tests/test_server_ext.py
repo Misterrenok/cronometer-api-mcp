@@ -23,6 +23,7 @@ HYBRID_TOOLS = {
     "get_repeated_items",
     "add_repeat_item",
     "delete_repeat_item",
+    "update_repeat_item",
     "list_macro_templates_web",
     "set_macro_targets",
     "create_macro_template",
@@ -62,7 +63,7 @@ def test_full_server_registers_all_tools():
     assert HYBRID_TOOLS <= names
     assert EXPORT_TOOLS <= names
     assert CONTROL_TOOLS <= names
-    assert len(names) == 49
+    assert len(names) == 50
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
