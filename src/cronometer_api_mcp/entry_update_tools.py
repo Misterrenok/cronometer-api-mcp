@@ -5,13 +5,18 @@ from __future__ import annotations
 import json
 
 from . import server as core
-from .control_tools import _entry_meal_group, _find_serving, _meal_group
+from .control_tools import (
+    _entry_meal_group,
+    _find_serving,
+    _meal_group,
+    _measure_quantity_to_api_amount,
+)
 
 mcp = core.mcp
 
 
 def _resolve_measure(client, food_id: int, measure_id: int) -> dict:
-    """Resolve one measure from a food and require a usable gram weight."""
+    """Resolve one measure from a food and require a usable positive value."""
     food = client.get_food(food_id)
     measures = [m for m in food.get("measures", []) if isinstance(m, dict)]
     measure = next((m for m in measures if m.get("id") == measure_id), None)
@@ -29,10 +34,10 @@ def _resolve_measure(client, food_id: int, measure_id: int) -> dict:
             f"Available measures: {available}"
         )
 
-    grams_per_unit = measure.get("value")
-    if not isinstance(grams_per_unit, (int, float)) or grams_per_unit <= 0:
+    value = measure.get("value")
+    if not isinstance(value, (int, float)) or value <= 0:
         raise ValueError(
-            f"Measure {measure_id} has no usable gram weight: {grams_per_unit!r}"
+            f"Measure {measure_id} has no usable value: {value!r}"
         )
     return measure
 
@@ -63,17 +68,21 @@ def update_food_entry(
     silently create duplicates.
 
     Amount rules:
-    - grams sets the replacement's exact gram weight.
-    - quantity uses the selected measure's grams-per-unit value. If measure_id
-      is omitted, the source entry's measure is used.
+    - grams sets an exact physical gram weight for Weight/Atomic measures.
+      Recipe entries do not use physical grams in Cronometer's diary payload;
+      use quantity with the reference Recipe serving measure instead.
+    - quantity uses the selected serving measure. Weight/Atomic measures are
+      converted through grams-per-unit. Confirmed reference Recipe measures
+      (value=1) pass quantity directly as Cronometer's serving-count field.
     - grams and quantity are mutually exclusive.
-    - if both are omitted, the source gram weight is preserved.
+    - if both are omitted, the source raw amount is preserved, which is safe
+      for moving an existing Recipe entry without changing its amount.
 
     Args:
         entry_id: Existing serving ID from get_food_log/get_diary_raw.
         source_date: Date containing the source entry, YYYY-MM-DD.
         destination_date: Optional new date; defaults to source_date.
-        grams: Optional exact replacement weight in grams.
+        grams: Optional exact physical grams for Weight/Atomic entries.
         measure_id: Optional new serving measure ID.
         quantity: Optional number of selected serving units.
         diary_group: preserve, breakfast, lunch, dinner, or snacks.
@@ -98,9 +107,9 @@ def update_food_entry(
         if not isinstance(food_id, int):
             raise ValueError("Source diary entry is missing a numeric foodId.")
 
-        source_grams = entry.get("grams")
-        if not isinstance(source_grams, (int, float)):
-            raise ValueError("Source diary entry is missing a numeric grams value.")
+        source_amount = entry.get("grams")
+        if not isinstance(source_amount, (int, float)):
+            raise ValueError("Source diary entry is missing a numeric amount value.")
 
         source_measure_id = entry.get("measureId")
         if source_measure_id is not None and not isinstance(source_measure_id, int):
@@ -108,18 +117,40 @@ def update_food_entry(
         target_measure_id = measure_id if measure_id is not None else source_measure_id
 
         measure = None
+        should_resolve_measure = (
+            isinstance(target_measure_id, int)
+            and target_measure_id > 0
+            and (quantity is not None or grams is not None or measure_id is not None)
+        )
+        if should_resolve_measure:
+            measure = _resolve_measure(client, food_id, target_measure_id)
+
         if quantity is not None:
-            if not isinstance(target_measure_id, int) or target_measure_id <= 0:
+            if measure is None:
                 raise ValueError(
                     "quantity requires a valid positive measure_id on the source "
                     "entry or in the request"
                 )
-            measure = _resolve_measure(client, food_id, target_measure_id)
-            target_grams = float(quantity) * float(measure["value"])
+            target_amount = _measure_quantity_to_api_amount(measure, quantity)
+        elif grams is not None:
+            if measure is not None and measure.get("type") == "Recipe":
+                raise ValueError(
+                    "Recipe diary entries store a serving count rather than physical "
+                    "grams. Use quantity with the reference Recipe serving measure."
+                )
+            target_amount = float(grams)
         else:
-            target_grams = float(grams) if grams is not None else float(source_grams)
-            if measure_id is not None and measure_id > 0:
-                measure = _resolve_measure(client, food_id, measure_id)
+            target_amount = float(source_amount)
+            if (
+                measure_id is not None
+                and measure is not None
+                and measure.get("type") == "Recipe"
+                and target_measure_id != source_measure_id
+            ):
+                raise ValueError(
+                    "Changing to a Recipe measure requires quantity so the replacement "
+                    "amount is explicit."
+                )
 
         source_group = _entry_meal_group(entry)
         if diary_group.strip().lower() == "preserve":
@@ -131,7 +162,7 @@ def update_food_entry(
             destination == source
             and target_group == source_group
             and target_measure_id == source_measure_id
-            and target_grams == float(source_grams)
+            and target_amount == float(source_amount)
         ):
             return core._ok(
                 {
@@ -149,7 +180,7 @@ def update_food_entry(
         created = client.add_serving(
             food_id=food_id,
             measure_id=target_measure_id,
-            grams=target_grams,
+            grams=target_amount,
             translation_id=translation_id,
             day=destination,
             diary_group=target_group,
@@ -192,6 +223,14 @@ def update_food_entry(
                 indent=2,
             )
 
+        amount_kind = "preserved_raw_amount"
+        if measure is not None:
+            amount_kind = (
+                "recipe_servings" if measure.get("type") == "Recipe" else "grams"
+            )
+        elif grams is not None:
+            amount_kind = "grams"
+
         return core._ok(
             {
                 "updated": True,
@@ -201,13 +240,14 @@ def update_food_entry(
                 "food_id": food_id,
                 "measure_id": target_measure_id,
                 "quantity": quantity,
-                "grams": target_grams,
+                "api_amount": target_amount,
+                "api_amount_kind": amount_kind,
                 "diary_group": target_group,
                 "measure": (
                     {
                         "name": measure.get("name"),
                         "type": measure.get("type"),
-                        "grams_per_unit": measure.get("value"),
+                        "value": measure.get("value"),
                     }
                     if measure is not None
                     else None
