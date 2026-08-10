@@ -27,8 +27,10 @@ def _meal_group(value: str, *, allow_auto: bool = True) -> int:
     key = value.strip().lower()
     group = _MEAL_GROUPS.get(key)
     if group is None or (group == 0 and not allow_auto):
-        allowed = "auto, breakfast, lunch, dinner, snacks" if allow_auto else (
-            "breakfast, lunch, dinner, snacks"
+        allowed = (
+            "auto, breakfast, lunch, dinner, snacks"
+            if allow_auto
+            else "breakfast, lunch, dinner, snacks"
         )
         raise ValueError(f"Invalid diary_group {value!r}. Must be one of: {allowed}.")
     return group
@@ -128,7 +130,11 @@ def add_food_entry_by_measure(
         measure = next((m for m in measures if m.get("id") == measure_id), None)
         if measure is None:
             available = [
-                {"measure_id": m.get("id"), "name": m.get("name"), "value": m.get("value")}
+                {
+                    "measure_id": m.get("id"),
+                    "name": m.get("name"),
+                    "value": m.get("value"),
+                }
                 for m in measures
             ]
             raise ValueError(
@@ -430,8 +436,10 @@ def clear_food_entries(
             raise ValueError("date is required")
 
         group_key = diary_group.strip().lower()
-        group = None if group_key == "all" else _meal_group(
-            diary_group, allow_auto=False
+        group = (
+            None
+            if group_key == "all"
+            else _meal_group(diary_group, allow_auto=False)
         )
 
         client = core._get_client()
