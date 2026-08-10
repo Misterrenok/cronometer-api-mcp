@@ -1,4 +1,4 @@
-"""Registration tests for the extended Cronometer MCP entrypoint."""
+"""Registration tests for the full Cronometer MCP entrypoint."""
 
 from __future__ import annotations
 
@@ -19,21 +19,39 @@ EXTRA_TOOLS = {
     "get_macro_targets_range",
 }
 
+HYBRID_TOOLS = {
+    "get_repeated_items",
+    "add_repeat_item",
+    "delete_repeat_item",
+    "list_macro_templates_web",
+    "set_macro_targets",
+    "create_macro_template",
+    "delete_macro_template",
+    "set_weekly_macro_schedule",
+    "get_recent_biometrics",
+    "add_biometric",
+    "remove_biometric",
+    "delete_fast",
+    "cancel_active_fast",
+}
 
-def test_extended_server_registers_full_tool_set():
-    from cronometer_api_mcp.server_ext import mcp
+
+def test_full_server_registers_all_tools():
+    from cronometer_api_mcp.server_all import mcp
 
     tools = asyncio.run(mcp.list_tools())
     names = {tool.name for tool in tools}
 
     assert EXTRA_TOOLS <= names
-    assert len(names) == 26
+    assert HYBRID_TOOLS <= names
+    assert len(names) == 39
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
 
-def test_extended_import_does_not_construct_client():
-    from cronometer_api_mcp import server
-    import cronometer_api_mcp.server_ext  # noqa: F401
+def test_full_import_does_not_construct_clients():
+    from cronometer_api_mcp import hybrid_tools, server
+    import cronometer_api_mcp.server_all  # noqa: F401
 
     assert server._client is None
+    assert hybrid_tools._web_client is None
