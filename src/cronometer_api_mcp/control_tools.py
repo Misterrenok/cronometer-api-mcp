@@ -107,10 +107,8 @@ def add_food_entry_by_measure(
     """Log a food using a Cronometer serving measure instead of manual grams.
 
     This resolves the chosen measure from get_food_details and converts a
-    human-sized quantity such as 2 eggs or 1.5 cups into the value expected by
-    Cronometer. Weight/Atomic measures use quantity * grams_per_unit. Recipe
-    measures use quantity directly because Cronometer stores their diary amount
-    as a serving count.
+    human-sized quantity such as 2 eggs or 1.5 cups into the gram amount
+    expected by Cronometer using the measure's grams-per-unit value.
 
     Args:
         food_id: Cronometer food ID.
@@ -144,14 +142,11 @@ def add_food_entry_by_measure(
 
         measure_type = measure.get("type")
         grams_per_unit = measure.get("value")
-        if measure_type == "Recipe":
-            api_amount = float(quantity)
-        else:
-            if not isinstance(grams_per_unit, (int, float)) or grams_per_unit <= 0:
-                raise ValueError(
-                    f"Measure {measure_id} has no usable gram weight: {grams_per_unit!r}"
-                )
-            api_amount = float(quantity) * float(grams_per_unit)
+        if not isinstance(grams_per_unit, (int, float)) or grams_per_unit <= 0:
+            raise ValueError(
+                f"Measure {measure_id} has no usable gram weight: {grams_per_unit!r}"
+            )
+        api_amount = float(quantity) * float(grams_per_unit)
 
         result = client.add_serving(
             food_id=food_id,
