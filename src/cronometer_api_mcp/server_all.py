@@ -2,6 +2,7 @@
 
 from . import server_ext as extended
 from . import control_tools as _control_tools  # noqa: F401
+from . import entry_update_tools as _entry_update_tools  # noqa: F401
 from . import hybrid_tools as _hybrid_tools  # noqa: F401
 from . import export_tools as _export_tools  # noqa: F401
 
