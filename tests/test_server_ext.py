@@ -32,6 +32,7 @@ HYBRID_TOOLS = {
     "get_recent_biometrics",
     "add_biometric",
     "remove_biometric",
+    "update_biometric",
     "delete_fast",
     "cancel_active_fast",
 }
@@ -63,7 +64,7 @@ def test_full_server_registers_all_tools():
     assert HYBRID_TOOLS <= names
     assert EXPORT_TOOLS <= names
     assert CONTROL_TOOLS <= names
-    assert len(names) == 50
+    assert len(names) == 51
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
 
