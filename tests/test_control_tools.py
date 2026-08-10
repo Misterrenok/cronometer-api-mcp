@@ -157,10 +157,18 @@ def test_move_food_entry_adds_before_delete(monkeypatch):
     assert client.delete_calls == [(["old"], date(2026, 8, 9))]
 
 
-def test_copy_meal_between_dates_uses_group_number(monkeypatch):
+def test_copy_meal_between_dates_copies_only_selected_food_group(monkeypatch):
     from cronometer_api_mcp import control_tools
 
     client = FakeClient()
+    client.diary = {
+        "diary": [
+            _serving("breakfast", meal_group=1),
+            _serving("lunch-1", meal_group=2, grams=60),
+            _serving("lunch-2", meal_group=2, grams=80),
+            {"type": "Exercise", "servingId": "exercise", "order": (2 << 16) | 1},
+        ]
+    }
     monkeypatch.setattr(control_tools.core, "_get_client", lambda: client)
 
     result = _payload(
@@ -172,11 +180,11 @@ def test_copy_meal_between_dates_uses_group_number(monkeypatch):
     )
 
     assert result["status"] == "success"
-    endpoint, payload = client.request_calls[0]
-    assert endpoint == "/api/v2/copy"
-    assert payload["from"] == "2026-8-9"
-    assert payload["to"] == "2026-8-10"
-    assert payload["diaryGroupNumber"] == 2
+    assert result["copied_count"] == 2
+    assert [call["grams"] for call in client.add_calls] == [60.0, 80.0]
+    assert all(call["diary_group"] == 2 for call in client.add_calls)
+    assert all(call["day"] == date(2026, 8, 10) for call in client.add_calls)
+    assert not client.delete_calls
 
 
 def test_clear_food_entries_filters_meal_and_non_food(monkeypatch):
