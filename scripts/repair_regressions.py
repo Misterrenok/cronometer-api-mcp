@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """One-shot repair: narrow macro-template mobile payloads to the known endpoint."""
+
 from pathlib import Path
 
 PATH = Path("src/cronometer_api_mcp/mobile_write_fixes.py")
 
-OLD = '''    common = {
+OLD = """    common = {
         "id": 0,
         "name": template_name,
         "protein": float(protein_g),
@@ -58,9 +59,9 @@ OLD = '''    common = {
             {"target": energy_template, "config": {"call_version": 1}},
         ),
     ]
-'''
+"""
 
-NEW = '''    # The mobile handler is confirmed to require the top-level key
+NEW = """    # The mobile handler is confirmed to require the top-level key
     # ``template``.  The account's active diary template has no ID field, so
     # try that exact shape first; ID variants follow only to identify the
     # server's create/update semantics.
@@ -109,7 +110,7 @@ NEW = '''    # The mobile handler is confirmed to require the top-level key
             {"template": id_null_template, "config": {"call_version": 1}},
         ),
     ]
-'''
+"""
 
 
 def main() -> None:
