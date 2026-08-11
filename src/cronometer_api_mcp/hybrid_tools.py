@@ -1,22 +1,27 @@
 """Hybrid Cronometer tools for operations not exposed by the mobile REST client.
 
-The primary MCP remains backed by the mobile REST API.  This module lazily uses
-``cronometer-mcp`` (cphoskins, MIT) for a small set of confirmed web GWT-RPC
-operations that are currently missing from the mobile client: recurring foods,
-macro writes, fasting deletion/cancellation, and biometric writes.
-
-The dependency is imported only when one of these tools is called, so server
-startup and all REST-backed tools remain independent of the web backend.
+The primary MCP remains backed by the mobile REST API. This module lazily uses
+``cronometer-mcp`` (cphoskins, MIT) for confirmed web GWT-RPC operations that
+are currently missing from the mobile client: recurring foods, macro writes,
+fasting deletion/cancellation, and biometric writes.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from . import server as core
+from .biometric_ids import normalize_biometric_id, web_biometric_id
 
 mcp = core.mcp
 _web_client = None
+
+_BIOMETRIC_METRIC_IDS = {
+    "weight": 1,
+    "heart_rate": 3,
+    "blood_glucose": 6,
+    "body_fat": 8,
+}
 
 
 def _get_web_client():
@@ -35,6 +40,177 @@ def _get_web_client():
 
 def _date(value: str | None) -> date:
     return date.fromisoformat(value) if value else core._get_client().today()
+
+
+def _mobile_biometric_rows(day: date) -> list[dict]:
+    diary = core._get_client().get_diary(day) or {}
+    return [
+        row
+        for row in diary.get("diary") or []
+        if isinstance(row, dict)
+        and row.get("type") == "Biometric"
+        and row.get("biometricId") not in (None, "")
+    ]
+
+
+def _find_recent_biometric(biometric_id: int | str) -> tuple[date, dict] | None:
+    wanted = normalize_biometric_id(biometric_id)
+    mobile = core._get_client()
+    today = mobile.today()
+    for offset in range(31):
+        day = today - timedelta(days=offset)
+        for row in _mobile_biometric_rows(day):
+            if str(row.get("biometricId")) == wanted:
+                return day, row
+    return None
+
+
+def _prepare_biometric(
+    metric_type: str,
+    value: float,
+    unit: str | None,
+) -> tuple[str, int, float, str]:
+    metric = str(metric_type).strip().lower()
+    if metric not in _BIOMETRIC_METRIC_IDS:
+        raise ValueError(
+            "metric_type must be one of: body_fat, blood_glucose, "
+            "heart_rate, weight"
+        )
+
+    stored_value = float(value)
+    if metric == "weight":
+        chosen = (unit or "kg").strip().lower()
+        if chosen in ("kg", "kilogram", "kilograms"):
+            stored_value *= 2.2046226218
+            stored_unit = "lbs"
+        elif chosen in ("lb", "lbs", "pound", "pounds"):
+            stored_unit = "lbs"
+        else:
+            raise ValueError("weight unit must be kg or lbs")
+    elif metric == "blood_glucose":
+        stored_unit = unit or "mg/dL"
+    elif metric == "heart_rate":
+        stored_unit = unit or "bpm"
+    else:
+        stored_unit = unit or "%"
+
+    return metric, _BIOMETRIC_METRIC_IDS[metric], stored_value, stored_unit
+
+
+def _cleanup_new_biometric_ids(ids: list[str]) -> None:
+    web = _get_web_client()
+    for biometric_id in ids:
+        try:
+            web.remove_biometric(web_biometric_id(biometric_id))
+        except Exception:
+            # This is only rollback after a failed verification. The caller
+            # still reports the write as failed and includes the unexpected IDs.
+            pass
+
+
+def _add_biometric_verified(
+    metric_type: str,
+    value: float,
+    day: date,
+    unit: str | None = None,
+) -> dict:
+    metric, expected_metric_id, stored_value, stored_unit = _prepare_biometric(
+        metric_type, value, unit
+    )
+    before_ids = {
+        str(row.get("biometricId")) for row in _mobile_biometric_rows(day)
+    }
+
+    web = _get_web_client()
+    wire_id = str(web.add_biometric(metric, stored_value, day) or "")
+    transport_id = None
+    if wire_id:
+        try:
+            transport_id = normalize_biometric_id(wire_id)
+        except ValueError:
+            transport_id = None
+
+    candidates = [
+        row
+        for row in _mobile_biometric_rows(day)
+        if str(row.get("biometricId")) not in before_ids
+    ]
+    matches = [
+        row for row in candidates if row.get("metricId") == expected_metric_id
+    ]
+
+    if not matches:
+        unexpected_ids = [str(row.get("biometricId")) for row in candidates]
+        actual_metric_ids = sorted(
+            {
+                row.get("metricId")
+                for row in candidates
+                if row.get("metricId") is not None
+            }
+        )
+        _cleanup_new_biometric_ids(unexpected_ids)
+        raise RuntimeError(
+            "addBiometric was not verified: expected metric_id "
+            f"{expected_metric_id} ({metric}), got metric_ids={actual_metric_ids}; "
+            f"unexpected_ids={unexpected_ids}. Any detected wrong write was rolled back."
+        )
+
+    chosen = None
+    if transport_id:
+        chosen = next(
+            (
+                row
+                for row in matches
+                if str(row.get("biometricId")) == transport_id
+            ),
+            None,
+        )
+    chosen = chosen or matches[0]
+    biometric_id = str(chosen.get("biometricId"))
+
+    return {
+        "biometric_id": biometric_id,
+        "transport_id": transport_id,
+        "wire_id": wire_id or None,
+        "metric_type": metric,
+        "metric_id": expected_metric_id,
+        "input_value": value,
+        "input_unit": unit,
+        "stored_value": round(stored_value, 4),
+        "stored_unit": stored_unit,
+        "date": str(day),
+    }
+
+
+def _remove_biometric_verified(biometric_id: int | str) -> dict:
+    canonical_id = normalize_biometric_id(biometric_id)
+    found = _find_recent_biometric(canonical_id)
+    if found is None:
+        raise ValueError(
+            f"biometric_id {canonical_id!r} was not found in the recent mobile diary"
+        )
+    day, _row = found
+
+    web = _get_web_client()
+    wire_id = web_biometric_id(canonical_id)
+    ok = web.remove_biometric(wire_id)
+    if not ok:
+        raise RuntimeError(f"removeMeasurement did not confirm biometric {canonical_id}")
+
+    remaining = {
+        str(row.get("biometricId")) for row in _mobile_biometric_rows(day)
+    }
+    if canonical_id in remaining:
+        raise RuntimeError(
+            "removeMeasurement returned success but the biometric still exists: "
+            f"biometric_id={canonical_id}, wire_id={wire_id}"
+        )
+    return {
+        "deleted": True,
+        "biometric_id": canonical_id,
+        "wire_id": wire_id,
+        "date": str(day),
+    }
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
@@ -127,8 +303,12 @@ def set_macro_targets(
         }
         if any(float(v) < 0 for v in values.values()):
             raise ValueError("macro targets cannot be negative")
-        ok = client.update_daily_targets(day=day, template_name=template_name, **values)
-        return core._ok({"updated": bool(ok), "date": str(day), "targets": values, "backend": "web-gwt"})
+        ok = client.update_daily_targets(
+            day=day, template_name=template_name, **values
+        )
+        return core._ok(
+            {"updated": bool(ok), "date": str(day), "targets": values, "backend": "web-gwt"}
+        )
     except Exception as e:
         return core._err(e)
 
@@ -141,7 +321,7 @@ def create_macro_template(
     carbs_g: float,
     calories: float,
 ) -> str:
-    """Create a saved macro target template and return its template ID."""
+    """Create a saved macro target template and return its verified template ID."""
     try:
         if min(protein_g, fat_g, carbs_g, calories) < 0:
             raise ValueError("macro targets cannot be negative")
@@ -152,7 +332,11 @@ def create_macro_template(
             carbs_g=carbs_g,
             calories=calories,
         )
-        return core._ok({"template_id": template_id, "template_name": template_name, "backend": "web-gwt"})
+        if not template_id:
+            raise RuntimeError("macro template write did not return a verified template ID")
+        return core._ok(
+            {"template_id": template_id, "template_name": template_name, "backend": "web-gwt"}
+        )
     except Exception as e:
         return core._err(e)
 
@@ -182,17 +366,39 @@ def set_weekly_macro_schedule(template_id: int, days_of_week: list[int]) -> str:
         for day in days:
             client.save_macro_schedule(day, template_id)
             updated.append(day)
-        return core._ok({"template_id": template_id, "days_of_week": updated, "backend": "web-gwt"})
+        return core._ok(
+            {"template_id": template_id, "days_of_week": updated, "backend": "web-gwt"}
+        )
     except Exception as e:
         return core._err(e)
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
 def get_recent_biometrics() -> str:
-    """Get recent biometric entries including removable biometric IDs."""
+    """Get recent biometric entries with canonical decimal biometric IDs."""
     try:
-        entries = _get_web_client().get_recent_biometrics()
-        return core._ok({"count": len(entries), "biometrics": entries, "backend": "web-gwt"})
+        mobile = core._get_client()
+        today = mobile.today()
+        records: list[dict] = []
+        for offset in range(31):
+            day = today - timedelta(days=offset)
+            for row in _mobile_biometric_rows(day):
+                records.append(
+                    {
+                        "biometric_id": str(row.get("biometricId")),
+                        "value": row.get("amount", row.get("value")),
+                        "metric_id": row.get("metricId"),
+                        "unit_id": row.get("unitId"),
+                        "date": str(row.get("day") or day),
+                    }
+                )
+        records.sort(
+            key=lambda row: (str(row.get("date") or ""), row.get("biometric_id") or ""),
+            reverse=True,
+        )
+        return core._ok(
+            {"count": len(records), "biometrics": records, "backend": "mobile-diary"}
+        )
     except Exception as e:
         return core._err(e)
 
@@ -204,47 +410,25 @@ def add_biometric(
     date: str | None = None,
     unit: str | None = None,
 ) -> str:
-    """Log weight, blood glucose, heart rate, or body fat.
+    """Log a biometric and verify its numeric ID and metric in the mobile diary.
 
-    Supported metric_type values: weight, blood_glucose, heart_rate, body_fat.
-    Weight may be supplied as kg or lbs; the web backend stores weight through
-    its lbs payload, so kg is converted automatically. Other expected units are
-    mg/dL, bpm, and percent respectively.
+    Supported metric_type values are weight, blood_glucose, heart_rate and
+    body_fat. If Cronometer's web endpoint writes the wrong metric, the MCP
+    rolls that new row back and reports an error instead of claiming success.
     """
     try:
-        metric = metric_type.strip().lower()
-        stored_value = float(value)
-        stored_unit = unit
-        if metric == "weight":
-            chosen = (unit or "kg").strip().lower()
-            if chosen in ("kg", "kilogram", "kilograms"):
-                stored_value = stored_value * 2.2046226218
-                stored_unit = "lbs"
-            elif chosen in ("lb", "lbs", "pound", "pounds"):
-                stored_unit = "lbs"
-            else:
-                raise ValueError("weight unit must be kg or lbs")
-        biometric_id = _get_web_client().add_biometric(metric, stored_value, _date(date))
-        return core._ok({
-            "biometric_id": biometric_id,
-            "metric_type": metric,
-            "input_value": value,
-            "input_unit": unit,
-            "stored_value": round(stored_value, 4),
-            "stored_unit": stored_unit,
-            "date": str(_date(date)),
-            "backend": "web-gwt",
-        })
+        result = _add_biometric_verified(metric_type, value, _date(date), unit)
+        return core._ok({**result, "backend": "web-gwt+mobile-verify"})
     except Exception as e:
         return core._err(e)
 
 
 @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
 def remove_biometric(biometric_id: str) -> str:
-    """Remove a biometric measurement by its biometric ID."""
+    """Remove a biometric by decimal ID (or its equivalent GWT wire token)."""
     try:
-        ok = _get_web_client().remove_biometric(biometric_id)
-        return core._ok({"deleted": bool(ok), "biometric_id": biometric_id, "backend": "web-gwt"})
+        result = _remove_biometric_verified(biometric_id)
+        return core._ok({**result, "backend": "web-gwt+mobile-verify"})
     except Exception as e:
         return core._err(e)
 
@@ -264,6 +448,13 @@ def cancel_active_fast(fast_id: int) -> str:
     """Cancel an active fast while keeping its recurring series/schedule."""
     try:
         ok = _get_web_client().cancel_fast_keep_series(fast_id)
-        return core._ok({"cancelled": bool(ok), "fast_id": fast_id, "series_preserved": True, "backend": "web-gwt"})
+        return core._ok(
+            {
+                "cancelled": bool(ok),
+                "fast_id": fast_id,
+                "series_preserved": True,
+                "backend": "web-gwt",
+            }
+        )
     except Exception as e:
         return core._err(e)
