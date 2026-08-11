@@ -15,4 +15,10 @@ jobs:
       - name: Install dependencies
         run: uv sync
       - name: Inspect current Cronometer bundle
-        run: uv run python scripts/inspect_cronometer_bundle.py
+        run: uv run python scripts/inspect_cronometer_bundle.py > bundle-inspect.txt
+      - name: Upload inspection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cronometer-bundle-inspect
+          path: bundle-inspect.txt
+          if-no-files-found: error
