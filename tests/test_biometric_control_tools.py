@@ -6,52 +6,45 @@ import json
 from datetime import date
 
 
-class FakeWebClient:
-    def __init__(self) -> None:
-        self.items = [
-            {
-                "biometric_id": "OLD123",
-                "metric_id": 1,
-                "value": 180.0,
-                "date": "2026-08-09",
-            }
-        ]
-        self.add_calls = []
-        self.delete_calls = []
-
-    def get_recent_biometrics(self) -> list[dict]:
-        return [dict(item) for item in self.items]
-
-    def add_biometric(self, metric_type: str, value: float, day: date) -> str:
-        self.add_calls.append((metric_type, value, day))
-        self.items.append(
-            {
-                "biometric_id": "NEW456",
-                "metric_id": 1,
-                "value": value,
-                "date": str(day),
-            }
-        )
-        return "NEW456"
-
-    def remove_biometric(self, biometric_id: str) -> bool:
-        self.delete_calls.append(biometric_id)
-        self.items = [
-            item for item in self.items if item["biometric_id"] != biometric_id
-        ]
-        return True
-
-
 def _payload(raw: str) -> dict:
     return json.loads(raw)
+
+
+def _source() -> tuple[date, dict]:
+    return (
+        date(2026, 8, 9),
+        {
+            "biometricId": 123456,
+            "metricId": 1,
+            "amount": 180.0,
+            "day": "2026-08-09",
+        },
+    )
+
+
+def _replacement() -> dict:
+    return {
+        "biometric_id": "654321",
+        "transport_id": "654321",
+        "wire_id": "WIRE2",
+        "metric_type": "weight",
+        "metric_id": 1,
+        "input_value": 80.0,
+        "input_unit": "kg",
+        "stored_value": 176.3698,
+        "stored_unit": "lbs",
+        "date": "2026-08-10",
+    }
 
 
 def test_update_biometric_adds_replacement_then_deletes_source(monkeypatch):
     from cronometer_api_mcp import biometric_control_tools
 
-    client = FakeWebClient()
+    calls: list[tuple] = []
     monkeypatch.setattr(
-        biometric_control_tools.hybrid, "_get_web_client", lambda: client
+        biometric_control_tools.hybrid,
+        "_find_recent_biometric",
+        lambda biometric_id: _source(),
     )
     monkeypatch.setattr(
         biometric_control_tools.hybrid,
@@ -59,9 +52,24 @@ def test_update_biometric_adds_replacement_then_deletes_source(monkeypatch):
         lambda value: date.fromisoformat(value) if value else date(2026, 8, 10),
     )
 
+    def add_verified(**kwargs):
+        calls.append(("add", kwargs))
+        return _replacement()
+
+    def remove_verified(biometric_id: str):
+        calls.append(("remove", biometric_id))
+        return {"deleted": True, "biometric_id": biometric_id}
+
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_add_biometric_verified", add_verified
+    )
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_remove_biometric_verified", remove_verified
+    )
+
     result = _payload(
         biometric_control_tools.update_biometric(
-            biometric_id="OLD123",
+            biometric_id="123456",
             metric_type="weight",
             value=80,
             date="2026-08-10",
@@ -71,91 +79,121 @@ def test_update_biometric_adds_replacement_then_deletes_source(monkeypatch):
 
     assert result["status"] == "success"
     assert result["updated"] is True
-    assert result["replacement_biometric_id"] == "NEW456"
-    assert result["replacement_candidates"][0]["biometric_id"] == "NEW456"
-    assert result["stored_unit"] == "lbs"
-    assert round(client.add_calls[0][1], 4) == 176.3698
-    assert client.add_calls[0][2] == date(2026, 8, 10)
-    assert client.delete_calls == ["OLD123"]
+    assert result["source_biometric_id"] == "123456"
+    assert result["replacement_biometric_id"] == "654321"
+    assert result["replacement"]["stored_unit"] == "lbs"
+    assert calls[0][0] == "add"
+    assert calls[0][1]["metric_type"] == "weight"
+    assert calls[0][1]["day"] == date(2026, 8, 10)
+    assert calls[1] == ("remove", "123456")
 
 
 def test_update_biometric_missing_source_does_not_mutate(monkeypatch):
     from cronometer_api_mcp import biometric_control_tools
 
-    client = FakeWebClient()
+    mutated = False
     monkeypatch.setattr(
-        biometric_control_tools.hybrid, "_get_web_client", lambda: client
+        biometric_control_tools.hybrid,
+        "_find_recent_biometric",
+        lambda biometric_id: None,
     )
+
+    def should_not_add(**kwargs):
+        nonlocal mutated
+        mutated = True
+        raise AssertionError("replacement should not be created")
+
     monkeypatch.setattr(
-        biometric_control_tools.hybrid, "_date", lambda value: date(2026, 8, 10)
+        biometric_control_tools.hybrid, "_add_biometric_verified", should_not_add
     )
 
     result = _payload(
         biometric_control_tools.update_biometric(
-            biometric_id="MISSING",
+            biometric_id="999999",
             metric_type="heart_rate",
             value=70,
         )
     )
 
     assert result["status"] == "error"
-    assert "was not found" in result["error"]
-    assert not client.add_calls
-    assert not client.delete_calls
+    assert "was not found" in result["message"]
+    assert mutated is False
 
 
 def test_update_biometric_delete_exception_returns_partial(monkeypatch):
     from cronometer_api_mcp import biometric_control_tools
 
-    client = FakeWebClient()
-
-    def fail_delete(biometric_id: str) -> bool:
-        client.delete_calls.append(biometric_id)
-        raise RuntimeError("delete failed")
-
-    client.remove_biometric = fail_delete
     monkeypatch.setattr(
-        biometric_control_tools.hybrid, "_get_web_client", lambda: client
+        biometric_control_tools.hybrid,
+        "_find_recent_biometric",
+        lambda biometric_id: _source(),
     )
     monkeypatch.setattr(
         biometric_control_tools.hybrid, "_date", lambda value: date(2026, 8, 10)
     )
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid,
+        "_add_biometric_verified",
+        lambda **kwargs: _replacement(),
+    )
+
+    def fail_delete(biometric_id: str):
+        raise RuntimeError("delete failed")
+
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_remove_biometric_verified", fail_delete
+    )
 
     result = _payload(
         biometric_control_tools.update_biometric(
-            biometric_id="OLD123",
+            biometric_id="123456",
             metric_type="body_fat",
             value=15,
         )
     )
 
     assert result["status"] == "partial"
-    assert result["source_biometric_id"] == "OLD123"
-    assert result["replacement_biometric_id"] == "NEW456"
-    assert {item["biometric_id"] for item in result["current_biometrics"]} == {
-        "OLD123",
-        "NEW456",
-    }
+    assert result["source_biometric_id"] == "123456"
+    assert result["replacement_biometric_id"] == "654321"
     assert result["delete_error"] == "RuntimeError: delete failed"
 
 
-def test_update_biometric_rejects_unknown_metric_before_mutation(monkeypatch):
+def test_update_biometric_rejects_unknown_metric_without_delete(monkeypatch):
     from cronometer_api_mcp import biometric_control_tools
 
-    client = FakeWebClient()
+    deleted = False
     monkeypatch.setattr(
-        biometric_control_tools.hybrid, "_get_web_client", lambda: client
+        biometric_control_tools.hybrid,
+        "_find_recent_biometric",
+        lambda biometric_id: _source(),
+    )
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_date", lambda value: date(2026, 8, 10)
+    )
+
+    def reject_metric(**kwargs):
+        raise ValueError("metric_type must be one of: weight, heart_rate")
+
+    def should_not_delete(biometric_id: str):
+        nonlocal deleted
+        deleted = True
+        raise AssertionError("source must remain when replacement validation fails")
+
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_add_biometric_verified", reject_metric
+    )
+    monkeypatch.setattr(
+        biometric_control_tools.hybrid, "_remove_biometric_verified", should_not_delete
     )
 
     result = _payload(
         biometric_control_tools.update_biometric(
-            biometric_id="OLD123",
+            biometric_id="123456",
             metric_type="waist",
             value=80,
         )
     )
 
     assert result["status"] == "error"
-    assert "metric_type" in result["error"]
-    assert not client.add_calls
-    assert not client.delete_calls
+    assert "metric_type" in result["message"]
+    assert deleted is False
