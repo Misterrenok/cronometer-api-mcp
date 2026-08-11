@@ -232,7 +232,9 @@ async def run_sweep(session: ClientSession) -> int:
         print("FAIL tool registry does not match expected 51-tool surface")
 
     account = await sweep.call("get_account_info")
-    today = account.get("today") if isinstance(account.get("today"), str) else "2026-08-11"
+    today = (
+        account.get("today") if isinstance(account.get("today"), str) else "2026-08-11"
+    )
 
     # Read-only core and catalog surface.
     await sweep.call("get_food_log", {"date": today, "include_nutrition": False})
@@ -262,9 +264,7 @@ async def run_sweep(session: ClientSession) -> int:
         )
 
     await sweep.call("get_nutrient_catalog")
-    await sweep.call(
-        "search_foods_with_details", {"query": "banana", "limit": 2}
-    )
+    await sweep.call("search_foods_with_details", {"query": "banana", "limit": 2})
     await sweep.call("get_diary_raw", {"date": today})
     await sweep.call(
         "get_daily_nutrition_range",
@@ -586,12 +586,12 @@ async def run_sweep(session: ClientSession) -> int:
                     expectation="responsive",
                     note="setup lunch entry missing",
                 )
-            await sweep.call(
-                "clear_food_entries", {"date": D4, "diary_group": "all"}
-            )
+            await sweep.call("clear_food_entries", {"date": D4, "diary_group": "all"})
         else:
             # Still invoke every write tool if food setup unexpectedly fails.
-            print("FOOD_SETUP_UNAVAILABLE: invoking dependent tools on safe not-found paths")
+            print(
+                "FOOD_SETUP_UNAVAILABLE: invoking dependent tools on safe not-found paths"
+            )
             await sweep.call(
                 "add_food_entry",
                 {"food_id": FAKE_ID, "measure_id": FAKE_ID, "grams": 1.0, "date": D1},
@@ -639,10 +639,14 @@ async def run_sweep(session: ClientSession) -> int:
             )
             await sweep.call("copy_day", {"date": D6}, expectation="responsive")
             await sweep.call(
-                "mark_day_complete", {"date": D6, "complete": True}, expectation="responsive"
+                "mark_day_complete",
+                {"date": D6, "complete": True},
+                expectation="responsive",
             )
             await sweep.call(
-                "mark_day_complete", {"date": D6, "complete": False}, expectation="responsive"
+                "mark_day_complete",
+                {"date": D6, "complete": False},
+                expectation="responsive",
             )
             await sweep.call(
                 "remove_food_entry",
