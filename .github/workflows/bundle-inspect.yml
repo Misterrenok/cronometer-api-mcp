@@ -73,6 +73,7 @@ jobs:
           name: cronometer-deferred-inspect
           path: |
             deferred-report.txt
+            cronometer.cache.js
             fragment-*.cache.js
           if-no-files-found: error
           retention-days: 1
