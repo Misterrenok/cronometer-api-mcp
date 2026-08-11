@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Safe live probe for the Railway Cronometer MCP deployment.
 
-Temporary writes are removed in finally blocks.  The workflow runs only for
+Temporary writes are removed in finally blocks. The workflow runs only for
 commits whose message contains [live-probe].
 """
 from __future__ import annotations
@@ -74,6 +74,34 @@ async def temporary_biometric(
             await call(session, "remove_biometric", {"biometric_id": str(bid)})
 
 
+async def temporary_macro_template(session: ClientSession) -> bool:
+    name = "MCP Temporary Probe 2026-08-11"
+    created = await call(
+        session,
+        "create_macro_template",
+        {
+            "template_name": name,
+            "protein_g": 123.4,
+            "fat_g": 67.8,
+            "carbs_g": 234.5,
+            "calories": 2042.0,
+        },
+    )
+    template_id = (
+        created.get("template_id") if created.get("status") == "success" else None
+    )
+    try:
+        mobile = await call(session, "list_macro_templates")
+        web = await call(session, "list_macro_templates_web")
+        print("MACRO_MOBILE " + json.dumps(mobile, ensure_ascii=False, sort_keys=True))
+        print("MACRO_WEB " + json.dumps(web, ensure_ascii=False, sort_keys=True))
+        return bool(template_id)
+    finally:
+        if template_id:
+            await call(session, "delete_macro_template", {"template_id": template_id})
+            await call(session, "list_macro_templates")
+
+
 async def probe(url: str) -> bool:
     print(f"=== PROBE {url} ===")
     try:
@@ -87,15 +115,22 @@ async def probe(url: str) -> bool:
                     return False
                 today = account["today"]
 
-                await call(session, "get_macro_targets", {"date": today})
-                await call(session, "list_macro_templates_web")
-
-                results = []
-                results.append(
-                    await temporary_biometric(
-                        session, metric_type="weight", value=68.321, unit="kg", day=today
-                    )
+                targets = await call(session, "get_macro_targets", {"date": today})
+                daily = targets.get("daily_targets") or {}
+                await call(
+                    session,
+                    "set_macro_targets",
+                    {
+                        "target_date": today,
+                        "protein_g": daily.get("protein_g"),
+                        "fat_g": daily.get("fat_g"),
+                        "carbs_g": daily.get("carbs_g"),
+                        "calories": daily.get("energy_kcal"),
+                        "template_name": "Custom Targets",
+                    },
                 )
+
+                results = [await temporary_macro_template(session)]
                 results.append(
                     await temporary_biometric(
                         session, metric_type="heart_rate", value=77, unit="bpm", day=today
@@ -117,7 +152,7 @@ async def probe(url: str) -> bool:
                 )
 
                 final_recent = await call(session, "get_recent_biometrics")
-                print("TEMP_BIOMETRIC_SUCCESS " + json.dumps(results))
+                print("TEMP_SUCCESS " + json.dumps(results))
                 print("FINAL_RECENT_COUNT " + str(final_recent.get("count")))
                 return all(results)
     except Exception as exc:
