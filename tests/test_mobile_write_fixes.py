@@ -214,7 +214,7 @@ def test_gwt_create_rejects_transport_ok_without_persistence(monkeypatch) -> Non
         mobile_write_fixes, "_raw_mobile_templates", lambda: next(reads)
     )
 
-    with pytest.raises(RuntimeError, match="no exact persisted template"):
+    with pytest.raises(RuntimeError, match="Gold subscription"):
         gwt_macro_template_fix.save_macro_target_template_gwt_verified(
             client,
             "Probe Template",
