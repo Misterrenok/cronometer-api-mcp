@@ -11,7 +11,6 @@ CACHE = "https://cronometer.com/cronometer/{permutation}.cache.js"
 
 
 def function_bodies(text: str, symbol: str) -> list[str]:
-    """Return complete optimized JS function declarations for ``symbol``."""
     out: list[str] = []
     pattern = re.compile(rf"function\s+{re.escape(symbol)}\s*\([^)]*\)\s*\{{")
     for match in pattern.finditer(text):
@@ -41,24 +40,19 @@ def function_bodies(text: str, symbol: str) -> list[str]:
     return out
 
 
-def assignment_snippets(text: str, symbol: str, radius: int = 700) -> list[str]:
-    refs: list[str] = []
-    for pattern in (rf"{re.escape(symbol)}\s*=", rf"\b{re.escape(symbol)}\("):
-        for match in re.finditer(pattern, text):
-            refs.append(text[max(0, match.start() - radius) : match.start() + radius])
-            if len(refs) >= 20:
-                return refs
-    return refs
-
-
 def main() -> int:
+    symbols = (
+        "M_j", "L_j", "N_j", "J_j", "K_j", "I_j",
+        "O_j", "P_j", "Q_j", "R_j", "S_j", "T_j", "U_j",
+        "V_j", "W_j", "X_j", "Y_j", "Z_j", "$_j", "__j",
+        "Ns", "Js", "Ps", "Ms", "Is", "Qs", "Ws", "Ts",
+    )
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
         nocache = client.get(NOCACHE)
         nocache.raise_for_status()
         candidates = re.findall(r"='([A-F0-9]{32})'", nocache.text)
         if not candidates:
             raise RuntimeError("Could not find GWT permutation in nocache.js")
-
         for permutation in dict.fromkeys(candidates):
             response = client.get(CACHE.format(permutation=permutation))
             if response.status_code != 200:
@@ -66,25 +60,21 @@ def main() -> int:
             text = response.text
             print("PERMUTATION", permutation)
             print("MACRO_SIGNATURES", sorted(set(re.findall(r"MacroTargetTemplate/\d+", text))))
-
-            # Serialization registry from the current bundle maps
-            # Pso -> [M_j, L_j, N_j]. Extract all related functions exactly.
-            for symbol in ("M_j", "L_j", "N_j", "J_j", "K_j", "I_j"):
+            for symbol in symbols:
                 bodies = function_bodies(text, symbol)
                 print("FUNCTION", symbol, "COUNT", len(bodies))
                 for index, body in enumerate(bodies):
                     print(f"BODY {symbol} {index}: {body}")
-                if not bodies:
-                    for index, snippet in enumerate(assignment_snippets(text, symbol)):
-                        print(f"REF {symbol} {index}: {snippet}")
-
-            registry = "a[Pso]=[M_j,L_j,N_j]"
-            pos = text.find(registry)
-            print("REGISTRY_POS", pos)
-            if pos >= 0:
-                print("REGISTRY_CONTEXT", text[max(0, pos - 1500) : pos + 1500])
+            for needle in (".Ns=", ".Js=", ".Ps=", ".Ms=", ".Is=", ".Qs=", ".Ws=", ".Ts="):
+                print("METHOD_NEEDLE", needle, "COUNT", text.count(needle))
+                start = 0
+                for index in range(10):
+                    pos = text.find(needle, start)
+                    if pos < 0:
+                        break
+                    print(f"METHOD_REF {needle} {index}: {text[max(0,pos-500):pos+700]}")
+                    start = pos + len(needle)
             return 0
-
     raise RuntimeError("No GWT cache candidate could be fetched")
 
 
