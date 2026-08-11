@@ -162,8 +162,7 @@ def test_gwt_create_body_uses_current_14_field_serializer() -> None:
 
     assert body.startswith("7|0|11|https://cronometer.com/cronometer/|")
     type_table = (
-        "|java.lang.Double/858496421|"
-        "java.lang.Integer/3438268394|Probe Template|"
+        "|java.lang.Double/858496421|java.lang.Integer/3438268394|Probe Template|"
     )
     assert type_table in body
     assert "Rigorous" not in body
@@ -171,8 +170,7 @@ def test_gwt_create_body_uses_current_14_field_serializer() -> None:
     # null, carbs, null, null, calories, fat, null, true, Integer(0),
     # null, 0.0, name, protein, null.
     assert (
-        "|8|16039098|7|0|9|371.375|0|0|9|2971|9|99.0333|"
-        "0|1|10|0|0|0|11|9|148.55|0|"
+        "|8|16039098|7|0|9|371.375|0|0|9|2971|9|99.0333|0|1|10|0|0|0|11|9|148.55|0|"
     ) in body
     # The stale writer previously inserted an extra program string and wrote table indexes
     # into fields that are no longer Strings.
