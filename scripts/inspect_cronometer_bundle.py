@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Target the current Cronometer bundle around macro-template creation semantics."""
+"""Inspect every runtime use of MacroTargetTemplate in the current GWT bundle."""
 from __future__ import annotations
 
 import re
@@ -9,42 +9,32 @@ NOCACHE = "https://cronometer.com/cronometer/cronometer.nocache.js"
 CACHE = "https://cronometer.com/cronometer/{permutation}.cache.js"
 
 
-def emit_contexts(text: str, needle: str, radius: int = 3500, limit: int = 20) -> None:
-    print("NEEDLE", needle, "COUNT", text.count(needle))
-    start = 0
-    for index in range(limit):
-        pos = text.find(needle, start)
-        if pos < 0:
-            break
-        print(f"CTX {needle} {index} POS {pos}\n{text[max(0,pos-radius):pos+radius]}\nENDCTX")
-        start = pos + len(needle)
+def emit(text: str, pattern: str, radius: int = 5000) -> None:
+    matches = list(re.finditer(pattern, text))
+    print("PATTERN", pattern, "COUNT", len(matches))
+    for i, m in enumerate(matches):
+        lo=max(0,m.start()-radius); hi=min(len(text),m.end()+radius)
+        print(f"CTX {i} POS {m.start()}\n{text[lo:hi]}\nENDCTX")
 
 
 def main() -> int:
-    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-        nocache = client.get(NOCACHE)
-        nocache.raise_for_status()
-        permutations = list(dict.fromkeys(re.findall(r"='([A-F0-9]{32})'", nocache.text)))
-        for permutation in permutations:
-            response = client.get(CACHE.format(permutation=permutation))
-            if response.status_code != 200:
-                continue
-            text = response.text
-            print("PERMUTATION", permutation)
-            for needle in (
-                "Rigorous",
-                "saveMacroTargetTemplate",
-                "getMacroTargetTemplates",
-                "updateDailyTargetTemplate",
-                "new I_j",
-                "HKk(",
-                "337)",
-                "Pso",
+    with httpx.Client(timeout=30, follow_redirects=True) as c:
+        n=c.get(NOCACHE); n.raise_for_status()
+        perms=list(dict.fromkeys(re.findall(r"='([A-F0-9]{32})'", n.text)))
+        for p in perms:
+            r=c.get(CACHE.format(permutation=p))
+            if r.status_code != 200: continue
+            t=r.text
+            print("PERMUTATION",p)
+            for pat in (
+                r"wKk\([^\n;]{0,120},337\)",
+                r"HKk\([^\n;]{0,120},337\)",
+                r"DXm",
+                r"Pso",
+                r"function [A-Za-z0-9_$]+\([^)]*\)\{[^{}]{0,800}\.n[^{}]{0,800}\}",
             ):
-                emit_contexts(text, needle, limit=8 if needle not in {"HKk("} else 0)
+                emit(t,pat)
             return 0
-    raise RuntimeError("No current cache.js could be fetched")
+    raise RuntimeError('no cache')
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__=='__main__': raise SystemExit(main())
