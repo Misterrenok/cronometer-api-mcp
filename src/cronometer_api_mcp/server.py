@@ -80,7 +80,7 @@ def _err(e: Exception) -> str:
     else:
         msg = f"{type(e).__name__}: {e}"
 
-    return json.dumps({"status": "error", "message": msg})
+    return json.dumps({"status": "error", "message": msg, "error": msg})
 
 
 def _compact_diary_entries(data: dict) -> list[dict]:

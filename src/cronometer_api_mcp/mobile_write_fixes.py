@@ -63,7 +63,7 @@ def _safe_v2_request(
     request_payload.setdefault("lastSeen", 0)
 
     response = self._http.post(endpoint, json=request_payload)
-    response_text = response.text
+    response_text = getattr(response, "text", "")
     auth_http_failure = response.status_code == 401 or (
         response.status_code == 403 and _is_auth_failure(response_text)
     )
