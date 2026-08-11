@@ -8,6 +8,10 @@ This module serializes CREATE using the current 14-field
 MacroTargetTemplate/3691130822 layout observed in Cronometer's web bundle, then
 accepts success only after the mobile API reads back the exact persisted
 name/macros and exposes a real template ID. Unexpected writes are rolled back.
+Cronometer's current web client gates creation of saved macro templates behind
+its Gold Macro Scheduler entitlement, so a transport-level //OK without a
+persisted template is reported as an entitlement-aware failure rather than a
+false success.
 """
 
 from __future__ import annotations
@@ -196,8 +200,11 @@ def save_macro_target_template_gwt_verified(
         if created:
             _rollback_templates(web_client, created)
         raise RuntimeError(
-            "saveMacroTargetTemplate returned //OK but no exact persisted template "
-            "was visible through mobile REST; any detected new template was rolled back"
+            "Cronometer returned //OK but did not persist the saved macro template. "
+            "The current Cronometer web client and official product documentation "
+            "gate saved Macro Scheduler templates behind a Gold subscription. "
+            "If this account does not have an active Gold entitlement, template "
+            "creation is unavailable. Any detected partial write was rolled back."
         )
 
     chosen = matching[-1]
