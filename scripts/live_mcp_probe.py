@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read-only live probe used to capture current macro template wire data."""
+
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +33,9 @@ def text_payload(result: Any) -> dict:
     return {"raw": repr(result)}
 
 
-async def call(session: ClientSession, name: str, arguments: dict | None = None) -> dict:
+async def call(
+    session: ClientSession, name: str, arguments: dict | None = None
+) -> dict:
     result = await session.call_tool(name, arguments or {})
     payload = text_payload(result)
     print(f"TOOL {name}: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}")

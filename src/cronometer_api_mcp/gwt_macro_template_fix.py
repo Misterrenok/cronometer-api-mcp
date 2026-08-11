@@ -72,8 +72,7 @@ def _strict_template_matches(
     if any(actual is None for actual, _expected in pairs):
         return False
     return all(
-        abs(float(actual) - float(expected))
-        <= max(0.05, abs(float(expected)) * 1e-4)
+        abs(float(actual) - float(expected)) <= max(0.05, abs(float(expected)) * 1e-4)
         for actual, expected in pairs
     )
 

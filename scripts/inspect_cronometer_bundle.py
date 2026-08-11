@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Inspect MacroTargetTemplate runtime use and serializer layout in the GWT bundle."""
+
 from __future__ import annotations
 
 import re
