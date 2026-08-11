@@ -24,6 +24,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/cronometer_api_mcp/server.py src/cronometer_api_mcp/mobile_write_fixes.py
-          git commit -m "Repair error compatibility and auth response handling"
+          git add src/cronometer_api_mcp/server.py src/cronometer_api_mcp/mobile_write_fixes.py tests/test_client.py
+          git commit -m "Update functional failure regression expectation"
           git push origin HEAD:main
