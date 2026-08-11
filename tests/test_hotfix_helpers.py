@@ -27,7 +27,7 @@ def test_gwt_long_alphabet_accepts_dollar_and_underscore():
 def test_add_biometric_response_regex_contract():
     pattern = r'^//OK\[\s*(?:"([^"\r\n]+)"|([1-9][0-9]{5,}))'
 
-    match = re.search(pattern, '//OK[1754251966,[],0,7]')
+    match = re.search(pattern, "//OK[1754251966,[],0,7]")
     assert match and (match.group(1) or match.group(2)) == "1754251966"
 
     match = re.search(pattern, '//OK["BolQ7$",[],0,7]')

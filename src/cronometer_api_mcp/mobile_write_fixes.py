@@ -6,6 +6,7 @@ templates can return transport success without persisting. This module routes
 those operations through the mobile REST API and accepts success only after a
 read-back verifies the exact object that was requested.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -395,8 +396,7 @@ def _save_macro_target_template_mobile(
         )
 
     raise RuntimeError(
-        "No verified mobile macro-template write path succeeded; "
-        f"attempts={errors}"
+        f"No verified mobile macro-template write path succeeded; attempts={errors}"
     )
 
 

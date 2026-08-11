@@ -62,11 +62,7 @@ def update_repeat_item(
         if diary_group not in (1, 2, 3, 4):
             raise ValueError("diary_group must be 1, 2, 3, or 4")
 
-        days = (
-            list(range(7))
-            if days_of_week is None
-            else sorted(set(days_of_week))
-        )
+        days = list(range(7)) if days_of_week is None else sorted(set(days_of_week))
         if not days or any(day not in range(7) for day in days):
             raise ValueError("days_of_week must contain values 0 through 6")
 

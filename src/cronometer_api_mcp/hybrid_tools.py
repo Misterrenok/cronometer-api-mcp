@@ -73,8 +73,7 @@ def _prepare_biometric(
     metric = str(metric_type).strip().lower()
     if metric not in _BIOMETRIC_METRIC_IDS:
         raise ValueError(
-            "metric_type must be one of: body_fat, blood_glucose, "
-            "heart_rate, weight"
+            "metric_type must be one of: body_fat, blood_glucose, heart_rate, weight"
         )
 
     stored_value = float(value)
@@ -117,9 +116,7 @@ def _add_biometric_verified(
     metric, expected_metric_id, stored_value, stored_unit = _prepare_biometric(
         metric_type, value, unit
     )
-    before_ids = {
-        str(row.get("biometricId")) for row in _mobile_biometric_rows(day)
-    }
+    before_ids = {str(row.get("biometricId")) for row in _mobile_biometric_rows(day)}
 
     web = _get_web_client()
     wire_id = str(web.add_biometric(metric, stored_value, day) or "")
@@ -135,9 +132,7 @@ def _add_biometric_verified(
         for row in _mobile_biometric_rows(day)
         if str(row.get("biometricId")) not in before_ids
     ]
-    matches = [
-        row for row in candidates if row.get("metricId") == expected_metric_id
-    ]
+    matches = [row for row in candidates if row.get("metricId") == expected_metric_id]
 
     if not matches:
         unexpected_ids = [str(row.get("biometricId")) for row in candidates]
@@ -158,11 +153,7 @@ def _add_biometric_verified(
     chosen = None
     if transport_id:
         chosen = next(
-            (
-                row
-                for row in matches
-                if str(row.get("biometricId")) == transport_id
-            ),
+            (row for row in matches if str(row.get("biometricId")) == transport_id),
             None,
         )
     chosen = chosen or matches[0]
@@ -195,11 +186,11 @@ def _remove_biometric_verified(biometric_id: int | str) -> dict:
     wire_id = web_biometric_id(canonical_id)
     ok = web.remove_biometric(wire_id)
     if not ok:
-        raise RuntimeError(f"removeMeasurement did not confirm biometric {canonical_id}")
+        raise RuntimeError(
+            f"removeMeasurement did not confirm biometric {canonical_id}"
+        )
 
-    remaining = {
-        str(row.get("biometricId")) for row in _mobile_biometric_rows(day)
-    }
+    remaining = {str(row.get("biometricId")) for row in _mobile_biometric_rows(day)}
     if canonical_id in remaining:
         raise RuntimeError(
             "removeMeasurement returned success but the biometric still exists: "
@@ -213,7 +204,14 @@ def _remove_biometric_verified(biometric_id: int | str) -> dict:
     }
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def get_repeated_items() -> str:
     """List recurring Cronometer food entries using the web backend."""
     try:
@@ -223,7 +221,14 @@ def get_repeated_items() -> str:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    }
+)
 def add_repeat_item(
     food_source_id: int,
     food_id: int,
@@ -261,27 +266,56 @@ def add_repeat_item(
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def delete_repeat_item(repeat_item_id: int) -> str:
     """Delete a recurring food entry by repeat-item ID."""
     try:
         ok = _get_web_client().delete_repeat_item(repeat_item_id)
-        return core._ok({"deleted": bool(ok), "repeat_item_id": repeat_item_id, "backend": "web-gwt"})
+        return core._ok(
+            {
+                "deleted": bool(ok),
+                "repeat_item_id": repeat_item_id,
+                "backend": "web-gwt",
+            }
+        )
     except Exception as e:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def list_macro_templates_web() -> str:
     """List saved macro templates via the web backend, including template IDs."""
     try:
         templates = _get_web_client().get_macro_target_templates()
-        return core._ok({"count": len(templates), "templates": templates, "backend": "web-gwt"})
+        return core._ok(
+            {"count": len(templates), "templates": templates, "backend": "web-gwt"}
+        )
     except Exception as e:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def set_macro_targets(
     target_date: str,
     protein_g: float | None = None,
@@ -296,24 +330,38 @@ def set_macro_targets(
         client = _get_web_client()
         current = client.get_daily_macro_targets(day)
         values = {
-            "protein_g": protein_g if protein_g is not None else current.get("protein_g", 0.0),
+            "protein_g": protein_g
+            if protein_g is not None
+            else current.get("protein_g", 0.0),
             "fat_g": fat_g if fat_g is not None else current.get("fat_g", 0.0),
             "carbs_g": carbs_g if carbs_g is not None else current.get("carbs_g", 0.0),
-            "calories": calories if calories is not None else current.get("calories", 0.0),
+            "calories": calories
+            if calories is not None
+            else current.get("calories", 0.0),
         }
         if any(float(v) < 0 for v in values.values()):
             raise ValueError("macro targets cannot be negative")
-        ok = client.update_daily_targets(
-            day=day, template_name=template_name, **values
-        )
+        ok = client.update_daily_targets(day=day, template_name=template_name, **values)
         return core._ok(
-            {"updated": bool(ok), "date": str(day), "targets": values, "backend": "web-gwt"}
+            {
+                "updated": bool(ok),
+                "date": str(day),
+                "targets": values,
+                "backend": "web-gwt",
+            }
         )
     except Exception as e:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    }
+)
 def create_macro_template(
     template_name: str,
     protein_g: float,
@@ -333,25 +381,47 @@ def create_macro_template(
             calories=calories,
         )
         if not template_id:
-            raise RuntimeError("macro template write did not return a verified template ID")
+            raise RuntimeError(
+                "macro template write did not return a verified template ID"
+            )
         return core._ok(
-            {"template_id": template_id, "template_name": template_name, "backend": "web-gwt"}
+            {
+                "template_id": template_id,
+                "template_name": template_name,
+                "backend": "web-gwt",
+            }
         )
     except Exception as e:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def delete_macro_template(template_id: int) -> str:
     """Delete a saved macro target template by ID."""
     try:
         ok = _get_web_client().delete_macro_target_template(template_id)
-        return core._ok({"deleted": bool(ok), "template_id": template_id, "backend": "web-gwt"})
+        return core._ok(
+            {"deleted": bool(ok), "template_id": template_id, "backend": "web-gwt"}
+        )
     except Exception as e:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def set_weekly_macro_schedule(template_id: int, days_of_week: list[int]) -> str:
     """Assign a saved macro template to selected weekdays.
 
@@ -373,7 +443,14 @@ def set_weekly_macro_schedule(template_id: int, days_of_week: list[int]) -> str:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def get_recent_biometrics() -> str:
     """Get recent biometric entries with canonical decimal biometric IDs."""
     try:
@@ -403,7 +480,14 @@ def get_recent_biometrics() -> str:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    }
+)
 def add_biometric(
     metric_type: str,
     value: float,
@@ -423,7 +507,14 @@ def add_biometric(
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def remove_biometric(biometric_id: str) -> str:
     """Remove a biometric by decimal ID (or its equivalent GWT wire token)."""
     try:
@@ -433,7 +524,14 @@ def remove_biometric(biometric_id: str) -> str:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def delete_fast(fast_id: int) -> str:
     """Permanently delete a fasting entry by ID."""
     try:
@@ -443,7 +541,14 @@ def delete_fast(fast_id: int) -> str:
         return core._err(e)
 
 
-@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
 def cancel_active_fast(fast_id: int) -> str:
     """Cancel an active fast while keeping its recurring series/schedule."""
     try:

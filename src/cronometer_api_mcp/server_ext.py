@@ -206,7 +206,9 @@ def get_food_log_range(
             raw = client.get_diary(cursor)
             enriched = client.enrich_diary_servings(raw, include_nutrients=False)
             entries = core._compact_diary_entries(enriched)
-            days.append({"date": str(cursor), "count": len(entries), "entries": entries})
+            days.append(
+                {"date": str(cursor), "count": len(entries), "entries": entries}
+            )
             cursor += timedelta(days=1)
         return core._ok(
             {

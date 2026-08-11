@@ -4,6 +4,7 @@
 Temporary writes are removed in finally blocks. The workflow runs only for
 commits whose message contains [live-probe].
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,7 +37,9 @@ def text_payload(result: Any) -> dict:
     return {"raw": repr(result)}
 
 
-async def call(session: ClientSession, name: str, arguments: dict | None = None) -> dict:
+async def call(
+    session: ClientSession, name: str, arguments: dict | None = None
+) -> dict:
     result = await session.call_tool(name, arguments or {})
     payload = text_payload(result)
     print(f"TOOL {name}: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}")
@@ -133,7 +136,11 @@ async def probe(url: str) -> bool:
                 results = [await temporary_macro_template(session)]
                 results.append(
                     await temporary_biometric(
-                        session, metric_type="heart_rate", value=77, unit="bpm", day=today
+                        session,
+                        metric_type="heart_rate",
+                        value=77,
+                        unit="bpm",
+                        day=today,
                     )
                 )
                 results.append(

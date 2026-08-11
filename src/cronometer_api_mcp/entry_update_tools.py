@@ -36,9 +36,7 @@ def _resolve_measure(client, food_id: int, measure_id: int) -> dict:
 
     value = measure.get("value")
     if not isinstance(value, (int, float)) or value <= 0:
-        raise ValueError(
-            f"Measure {measure_id} has no usable value: {value!r}"
-        )
+        raise ValueError(f"Measure {measure_id} has no usable value: {value!r}")
     return measure
 
 

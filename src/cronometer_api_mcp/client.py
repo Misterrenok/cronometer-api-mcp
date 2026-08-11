@@ -134,7 +134,7 @@ class CronometerClient:
         """
         try:
             raw = self._session_path.read_text()
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError, OSError:
             return
         try:
             data = json.loads(raw)
@@ -389,7 +389,7 @@ class CronometerClient:
             return None
         try:
             ZoneInfo(name)
-        except (ZoneInfoNotFoundError, ValueError):
+        except ZoneInfoNotFoundError, ValueError:
             logger.warning(
                 "Ignoring invalid %s=%r (not a known IANA timezone)",
                 _ACCOUNT_TZ_ENV,
@@ -423,7 +423,7 @@ class CronometerClient:
         name = self._timezone or _DEFAULT_TIMEZONE
         try:
             return ZoneInfo(name)
-        except (ZoneInfoNotFoundError, ValueError):
+        except ZoneInfoNotFoundError, ValueError:
             logger.warning(
                 "Unknown account timezone %r; falling back to %s",
                 name,

@@ -55,9 +55,7 @@ def test_update_repeat_item_creates_replacement_then_deletes_source(monkeypatch)
     from cronometer_api_mcp import repeat_control_tools
 
     client = FakeWebClient()
-    monkeypatch.setattr(
-        repeat_control_tools.hybrid, "_get_web_client", lambda: client
-    )
+    monkeypatch.setattr(repeat_control_tools.hybrid, "_get_web_client", lambda: client)
 
     result = _payload(
         repeat_control_tools.update_repeat_item(
@@ -92,9 +90,7 @@ def test_update_repeat_item_missing_source_does_not_mutate(monkeypatch):
     from cronometer_api_mcp import repeat_control_tools
 
     client = FakeWebClient()
-    monkeypatch.setattr(
-        repeat_control_tools.hybrid, "_get_web_client", lambda: client
-    )
+    monkeypatch.setattr(repeat_control_tools.hybrid, "_get_web_client", lambda: client)
 
     result = _payload(
         repeat_control_tools.update_repeat_item(
@@ -122,9 +118,7 @@ def test_update_repeat_item_delete_exception_returns_partial(monkeypatch):
         raise RuntimeError("delete failed")
 
     client.delete_repeat_item = fail_delete
-    monkeypatch.setattr(
-        repeat_control_tools.hybrid, "_get_web_client", lambda: client
-    )
+    monkeypatch.setattr(repeat_control_tools.hybrid, "_get_web_client", lambda: client)
 
     result = _payload(
         repeat_control_tools.update_repeat_item(
@@ -148,9 +142,7 @@ def test_update_repeat_item_rejects_empty_days_without_mutation(monkeypatch):
     from cronometer_api_mcp import repeat_control_tools
 
     client = FakeWebClient()
-    monkeypatch.setattr(
-        repeat_control_tools.hybrid, "_get_web_client", lambda: client
-    )
+    monkeypatch.setattr(repeat_control_tools.hybrid, "_get_web_client", lambda: client)
 
     result = _payload(
         repeat_control_tools.update_repeat_item(

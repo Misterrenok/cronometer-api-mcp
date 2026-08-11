@@ -68,9 +68,7 @@ def _measure_quantity_to_api_amount(measure: dict, quantity: float) -> float:
     """
     value = measure.get("value")
     if not isinstance(value, (int, float)) or value <= 0:
-        raise ValueError(
-            f"Measure {measure.get('id')} has no usable value: {value!r}"
-        )
+        raise ValueError(f"Measure {measure.get('id')} has no usable value: {value!r}")
 
     if measure.get("type") == "Recipe":
         if float(value) != 1.0:
@@ -477,9 +475,7 @@ def clear_food_entries(
 
         group_key = diary_group.strip().lower()
         group = (
-            None
-            if group_key == "all"
-            else _meal_group(diary_group, allow_auto=False)
+            None if group_key == "all" else _meal_group(diary_group, allow_auto=False)
         )
 
         client = core._get_client()

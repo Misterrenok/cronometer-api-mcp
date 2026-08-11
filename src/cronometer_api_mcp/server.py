@@ -37,6 +37,7 @@ async def healthz(_request):
 
     return JSONResponse({"status": "ok"})
 
+
 _client: CronometerClient | None = None
 
 
@@ -80,6 +81,7 @@ def _err(e: Exception) -> str:
         msg = f"{type(e).__name__}: {e}"
 
     return json.dumps({"status": "error", "message": msg})
+
 
 def _compact_diary_entries(data: dict) -> list[dict]:
     """Return a compact, MCP-friendly diary representation.
@@ -715,13 +717,17 @@ def get_macro_targets(date: str | None = None) -> str:
             schedules = client.get_macro_schedules()
         except Exception as exc:
             schedules = None
-            warnings.append(f"Could not read weekly macro schedules: {type(exc).__name__}")
+            warnings.append(
+                f"Could not read weekly macro schedules: {type(exc).__name__}"
+            )
 
         try:
             templates = client.get_macro_target_templates()
         except Exception as exc:
             templates = None
-            warnings.append(f"Could not read saved macro templates: {type(exc).__name__}")
+            warnings.append(
+                f"Could not read saved macro templates: {type(exc).__name__}"
+            )
 
         return _ok(
             {

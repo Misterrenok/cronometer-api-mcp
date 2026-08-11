@@ -10,6 +10,7 @@ Keeping the MCP-facing ID numeric makes IDs from the mobile diary directly
 usable for get/update/delete operations.  The web token is generated only at
 the GWT boundary.
 """
+
 from __future__ import annotations
 
 GWT_LONG_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$_"
