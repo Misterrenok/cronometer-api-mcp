@@ -22,3 +22,4 @@ jobs:
           name: cronometer-bundle-inspect
           path: bundle-inspect.txt
           if-no-files-found: error
+          retention-days: 1
