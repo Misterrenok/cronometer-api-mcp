@@ -342,6 +342,22 @@ def _save_macro_target_template_mobile(
             "/api/v2/update_macro_target_template",
             {"template": energy_template, "config": {"call_version": 1}},
         ),
+        (
+            "/api/v2/update_macro_target_template",
+            {"macroTargetTemplate": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/update_macro_target_template",
+            {"macro_target_template": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/update_macro_target_template",
+            {"targetTemplate": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/update_macro_target_template",
+            {"target": energy_template, "config": {"call_version": 1}},
+        ),
     ]
     errors: list[str] = []
 

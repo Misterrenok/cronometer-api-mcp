@@ -118,6 +118,19 @@ async def probe(url: str) -> bool:
                     return False
                 today = account["today"]
 
+                # Remove only the exact temporary record left by a prior aborted probe.
+                recent = await call(session, "get_recent_biometrics")
+                if any(
+                    str(item.get("biometric_id")) == "1754710557"
+                    for item in recent.get("biometrics", [])
+                    if isinstance(item, dict)
+                ):
+                    await call(
+                        session,
+                        "remove_biometric",
+                        {"biometric_id": "1754710557"},
+                    )
+
                 targets = await call(session, "get_macro_targets", {"date": today})
                 daily = targets.get("daily_targets") or {}
                 await call(
@@ -134,6 +147,22 @@ async def probe(url: str) -> bool:
                 )
 
                 results = [await temporary_macro_template(session)]
+
+                # Restore the exact pre-probe daily targets even if a candidate
+                # macro-template endpoint unexpectedly touched today's template.
+                await call(
+                    session,
+                    "set_macro_targets",
+                    {
+                        "target_date": today,
+                        "protein_g": daily.get("protein_g"),
+                        "fat_g": daily.get("fat_g"),
+                        "carbs_g": daily.get("carbs_g"),
+                        "calories": daily.get("energy_kcal"),
+                        "template_name": "Custom Targets",
+                    },
+                )
+
                 results.append(
                     await temporary_biometric(
                         session,
