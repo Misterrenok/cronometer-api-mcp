@@ -1,8 +1,8 @@
 """Verified mobile-write fixes for Cronometer API regressions.
 
-The pinned web-GWT client has two stale write paths in the current Cronometer
+The pinned web-GWT client has stale write paths in the current Cronometer
 backend: several biometric types can silently become Weight, and saved macro
-templates can return transport success without persisting.  This module routes
+templates can return transport success without persisting. This module routes
 those operations through the mobile REST API and accepts success only after a
 read-back verifies the exact object that was requested.
 """
@@ -13,6 +13,7 @@ from types import MethodType
 
 from . import hybrid_tools as hybrid
 from . import server as core
+from .client import CronometerError
 
 _ORIGINAL_ADD = hybrid._add_biometric_verified
 _ORIGINAL_GET_WEB_CLIENT = hybrid._get_web_client
@@ -22,6 +23,64 @@ _UNIT_IDS = {
     "blood_glucose": {"mmol/l": 8, "mg/dl": 9},
     "body_fat": {"%": 13, "percent": 13},
 }
+
+_AUTH_MARKERS = (
+    "auth",
+    "session",
+    "token",
+    "expired",
+    "login required",
+    "not logged",
+    "not authenticated",
+)
+
+
+def _is_auth_failure(value: object) -> bool:
+    text = str(value).lower()
+    return any(marker in text for marker in _AUTH_MARKERS)
+
+
+def _safe_v2_request(
+    self,
+    endpoint: str,
+    payload: dict,
+    *,
+    _retried: bool = False,
+) -> dict:
+    """Retry only genuine auth failures, never ordinary endpoint failures.
+
+    The base client historically treated every HTTP 403 and every JSON
+    ``result=FAIL`` as an expired session. A functional write rejection could
+    therefore erase a valid session and trigger repeated /login calls. This
+    replacement preserves the session unless the response explicitly points to
+    auth/session/token expiry.
+    """
+    self._ensure_auth()
+
+    request_payload = dict(payload)
+    request_payload["auth"] = self._auth_block()
+    request_payload.setdefault("lastSeen", 0)
+
+    response = self._http.post(endpoint, json=request_payload)
+    response_text = response.text
+    auth_http_failure = response.status_code == 401 or (
+        response.status_code == 403 and _is_auth_failure(response_text)
+    )
+    if auth_http_failure and not _retried:
+        self._invalidate_session()
+        self.login()
+        return _safe_v2_request(self, endpoint, payload, _retried=True)
+
+    response.raise_for_status()
+    data = response.json()
+    if isinstance(data, dict) and data.get("result") in ("FAIL", "FAILURE"):
+        if _is_auth_failure(data) and not _retried:
+            self._invalidate_session()
+            self.login()
+            return _safe_v2_request(self, endpoint, payload, _retried=True)
+        raise CronometerError(f"Cronometer API error: {data}")
+
+    return data
 
 
 def _unit_id(metric: str, unit: str | None) -> int:
@@ -102,9 +161,9 @@ def _try_mobile_add(
     ]
     errors: list[str] = []
 
-    for endpoint, payload in attempts:
+    for endpoint, attempt_payload in attempts:
         try:
-            response = mobile._request(endpoint, payload)
+            response = mobile._request(endpoint, attempt_payload)
         except Exception as exc:
             errors.append(f"{endpoint}: {type(exc).__name__}: {exc}")
             continue
@@ -136,7 +195,6 @@ def add_biometric_verified(
         metric_type, value, unit
     )
 
-    # Weight's web path is already confirmed live and handles kg->lbs correctly.
     if metric == "weight":
         return _ORIGINAL_ADD(metric_type, value, day, unit)
 
@@ -286,9 +344,9 @@ def _save_macro_target_template_mobile(
     ]
     errors: list[str] = []
 
-    for endpoint, payload in attempts:
+    for endpoint, attempt_payload in attempts:
         try:
-            response = mobile._request(endpoint, payload)
+            response = mobile._request(endpoint, attempt_payload)
         except Exception as exc:
             errors.append(f"{endpoint}: {type(exc).__name__}: {exc}")
             continue
@@ -352,8 +410,6 @@ def _patched_get_web_client():
     return client
 
 
-# Registered MCP functions resolve these module globals at call time, so the
-# replacements fix existing public tools without re-registering or changing
-# their schemas.
+core.CronometerClient._request = _safe_v2_request
 hybrid._add_biometric_verified = add_biometric_verified
 hybrid._get_web_client = _patched_get_web_client
