@@ -14,43 +14,65 @@ jobs:
         uses: astral-sh/setup-uv@v4
       - name: Install dependencies
         run: uv sync
-      - name: Inspect current Cronometer bundle
-        run: uv run python scripts/inspect_cronometer_bundle.py > bundle-inspect.txt
-      - name: Capture current Cronometer cache bundle
+      - name: Locate macro-template deferred fragment
         run: |
           uv run python - <<'PY'
           import re
           from pathlib import Path
           import httpx
 
-          nocache = httpx.get(
-              "https://cronometer.com/cronometer/cronometer.nocache.js",
-              timeout=30,
-              follow_redirects=True,
-          )
+          base = "https://cronometer.com/cronometer/"
+          nocache = httpx.get(base + "cronometer.nocache.js", timeout=30, follow_redirects=True)
           nocache.raise_for_status()
-          permutations = list(
-              dict.fromkeys(re.findall(r"='([A-F0-9]{32})'", nocache.text))
-          )
+          permutations = list(dict.fromkeys(re.findall(r"='([A-F0-9]{32})'", nocache.text)))
+          main = None
+          strong = None
           for permutation in permutations:
-              response = httpx.get(
-                  f"https://cronometer.com/cronometer/{permutation}.cache.js",
-                  timeout=30,
-                  follow_redirects=True,
-              )
+              response = httpx.get(base + permutation + ".cache.js", timeout=30, follow_redirects=True)
               if response.status_code == 200 and "MacroTargetTemplate" in response.text:
-                  Path("cronometer.cache.js").write_text(response.text, encoding="utf-8")
-                  print(permutation, len(response.text))
+                  main = response.text
+                  match = re.search(r"\$strongName = '([A-F0-9]{32})'", main)
+                  if not match:
+                      raise RuntimeError("strongName missing")
+                  strong = match.group(1)
                   break
-          else:
-              raise RuntimeError("No current Cronometer cache bundle found")
+          if main is None or strong is None:
+              raise RuntimeError("main macro bundle missing")
+
+          Path("cronometer.cache.js").write_text(main, encoding="utf-8")
+          report = [f"strongName={strong}"]
+          hits = 0
+          for fragment in range(0, 250):
+              url = f"{base}deferredjs/{strong}/{fragment}.cache.js"
+              response = httpx.get(url, timeout=10, follow_redirects=True)
+              if response.status_code != 200:
+                  continue
+              text = response.text
+              if "saveMacroTargetTemplate" not in text and "MacroTargetTemplate" not in text:
+                  continue
+              hits += 1
+              Path(f"fragment-{fragment}.cache.js").write_text(text, encoding="utf-8")
+              report.append(f"FRAGMENT {fragment} SIZE {len(text)}")
+              for needle in ("saveMacroTargetTemplate", "MacroTargetTemplate"):
+                  for match in list(re.finditer(needle, text))[:20]:
+                      lo = max(0, match.start() - 8000)
+                      hi = min(len(text), match.end() + 12000)
+                      report.append(
+                          f"\n--- {needle} fragment={fragment} pos={match.start()} ---\n"
+                          + text[lo:hi]
+                          + "\n--- END ---"
+                      )
+          report.append(f"\nhits={hits}")
+          Path("deferred-report.txt").write_text("\n".join(report), encoding="utf-8")
+          if hits == 0:
+              raise RuntimeError("No deferred macro-template fragment found")
           PY
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cronometer-bundle-inspect
+          name: cronometer-deferred-inspect
           path: |
-            bundle-inspect.txt
-            cronometer.cache.js
+            deferred-report.txt
+            fragment-*.cache.js
           if-no-files-found: error
           retention-days: 1
