@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Small live probe for the Railway MCP deployment.
+"""Safe live probe for the Railway Cronometer MCP deployment.
 
-Only performs temporary writes and always tries to clean them up.
-Intended for explicit [live-probe] commits in CI.
+Temporary writes are removed in finally blocks.  The workflow runs only for
+commits whose message contains [live-probe].
 """
 from __future__ import annotations
 
@@ -43,6 +43,37 @@ async def call(session: ClientSession, name: str, arguments: dict | None = None)
     return payload
 
 
+async def temporary_biometric(
+    session: ClientSession,
+    *,
+    metric_type: str,
+    value: float,
+    unit: str,
+    day: str,
+) -> bool:
+    added = await call(
+        session,
+        "add_biometric",
+        {"metric_type": metric_type, "value": value, "date": day, "unit": unit},
+    )
+    bid = added.get("biometric_id") if added.get("status") == "success" else None
+    try:
+        diary = await call(session, "get_diary_raw", {"date": day})
+        rows = [
+            row
+            for row in (diary.get("diary") or {}).get("diary", [])
+            if isinstance(row, dict) and row.get("type") == "Biometric"
+        ]
+        print(
+            f"BIOMETRIC_ROWS {metric_type} "
+            + json.dumps(rows, ensure_ascii=False, sort_keys=True)
+        )
+        return bool(bid)
+    finally:
+        if bid:
+            await call(session, "remove_biometric", {"biometric_id": str(bid)})
+
+
 async def probe(url: str) -> bool:
     print(f"=== PROBE {url} ===")
     try:
@@ -56,29 +87,39 @@ async def probe(url: str) -> bool:
                     return False
                 today = account["today"]
 
-                # Read macro state without changing it.
                 await call(session, "get_macro_targets", {"date": today})
                 await call(session, "list_macro_templates_web")
 
-                # Temporary weight write solely to capture the exact current mobile diary row.
-                added = await call(
-                    session,
-                    "add_biometric",
-                    {"metric_type": "weight", "value": 68.321, "date": today, "unit": "kg"},
+                results = []
+                results.append(
+                    await temporary_biometric(
+                        session, metric_type="weight", value=68.321, unit="kg", day=today
+                    )
                 )
-                bid = added.get("biometric_id") if added.get("status") == "success" else None
-                try:
-                    diary = await call(session, "get_diary_raw", {"date": today})
-                    rows = [
-                        row
-                        for row in (diary.get("diary") or {}).get("diary", [])
-                        if isinstance(row, dict) and row.get("type") == "Biometric"
-                    ]
-                    print("BIOMETRIC_ROWS " + json.dumps(rows, ensure_ascii=False, sort_keys=True))
-                finally:
-                    if bid:
-                        await call(session, "remove_biometric", {"biometric_id": str(bid)})
-                return True
+                results.append(
+                    await temporary_biometric(
+                        session, metric_type="heart_rate", value=77, unit="bpm", day=today
+                    )
+                )
+                results.append(
+                    await temporary_biometric(
+                        session,
+                        metric_type="blood_glucose",
+                        value=90,
+                        unit="mg/dL",
+                        day=today,
+                    )
+                )
+                results.append(
+                    await temporary_biometric(
+                        session, metric_type="body_fat", value=12.3, unit="%", day=today
+                    )
+                )
+
+                final_recent = await call(session, "get_recent_biometrics")
+                print("TEMP_BIOMETRIC_SUCCESS " + json.dumps(results))
+                print("FINAL_RECENT_COUNT " + str(final_recent.get("count")))
+                return all(results)
     except Exception as exc:
         print(f"PROBE_ERROR {type(exc).__name__}: {exc}")
         return False
