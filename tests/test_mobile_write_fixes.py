@@ -174,7 +174,7 @@ def test_gwt_create_body_uses_current_14_field_serializer() -> None:
         "|8|16039098|7|0|9|371.375|0|0|9|2971|9|99.0333|"
         "0|1|10|0|0|0|11|9|148.55|0|"
     ) in body
-    # The stale writer inserted an extra program string and wrote table indexes
+    # The stale writer previously inserted an extra program string and wrote table indexes
     # into fields that are no longer Strings.
     assert "|java.lang.Boolean/476441737|" not in body
 
