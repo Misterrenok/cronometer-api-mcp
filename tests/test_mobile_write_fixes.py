@@ -148,7 +148,7 @@ def test_template_helpers_accept_current_mobile_shapes() -> None:
     )
 
 
-def test_gwt_create_body_uses_current_name_and_int_field_order() -> None:
+def test_gwt_create_body_uses_current_14_field_serializer() -> None:
     client = FakeWebTemplateClient()
 
     body = gwt_macro_template_fix._build_create_body(
@@ -160,13 +160,19 @@ def test_gwt_create_body_uses_current_name_and_int_field_order() -> None:
         calories=2971.0,
     )
 
-    assert body.startswith("7|0|12|https://cronometer.com/cronometer/|")
-    assert "|java.lang.Integer/3438268394|Probe Template|" in body
+    assert body.startswith("7|0|11|https://cronometer.com/cronometer/|")
+    assert "|java.lang.Double/858496421|java.lang.Integer/3438268394|Probe Template|" in body
     assert "Rigorous" not in body
-    # Fields 9..13: Integer(0), int(0), String(name index 12), int(0), Double.
-    assert "|11|0|0|12|0|10|148.55|" in body
-    # The stale client encoded string-table indexes 12/13 into primitive ints.
-    assert "|11|0|12|0|13|" not in body
+    # Current 14 fields a,b,c,d,e,f,g,i,j,k,n,o,p,q for a new fixed template:
+    # null, carbs, null, null, calories, fat, null, true, Integer(0),
+    # null, 0.0, name, protein, null.
+    assert (
+        "|8|16039098|7|0|9|371.375|0|0|9|2971|9|99.0333|"
+        "0|1|10|0|0|0|11|9|148.55|0|"
+    ) in body
+    # The stale writer inserted an extra program string and wrote table indexes
+    # into fields that are no longer Strings.
+    assert "|java.lang.Boolean/476441737|" not in body
 
 
 def test_gwt_create_returns_only_mobile_verified_template_id(monkeypatch) -> None:
