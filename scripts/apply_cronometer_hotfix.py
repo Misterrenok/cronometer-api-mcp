@@ -8,7 +8,6 @@ committed into that external package from this repository.
 from __future__ import annotations
 
 import inspect
-import sys
 from pathlib import Path
 
 STAMP = "cronometer-hotfix-20260811-v2"
