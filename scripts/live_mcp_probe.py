@@ -21,7 +21,7 @@ URLS = [
     if u.strip()
 ]
 
-TEST_NAME = "MCP GWT Verify 20260811"
+TEST_NAME = "MCP GWT Serializer Verify 20260811 v2"
 TEST_MACROS = {
     "protein_g": 123.4,
     "fat_g": 67.8,
