@@ -19,7 +19,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
       - name: Install dependencies
         run: uv sync
-      - name: Format
+      - name: Format repository with Ruff
         run: uv run ruff format
       - name: Commit formatting
         run: |
