@@ -31,3 +31,5 @@ jobs:
           git add -u
           git commit -m "Apply Ruff formatting"
           git push origin HEAD:main
+
+# Manual format trigger for the full production sweep script.
