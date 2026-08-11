@@ -161,7 +161,11 @@ def test_gwt_create_body_uses_current_14_field_serializer() -> None:
     )
 
     assert body.startswith("7|0|11|https://cronometer.com/cronometer/|")
-    assert "|java.lang.Double/858496421|java.lang.Integer/3438268394|Probe Template|" in body
+    type_table = (
+        "|java.lang.Double/858496421|"
+        "java.lang.Integer/3438268394|Probe Template|"
+    )
+    assert type_table in body
     assert "Rigorous" not in body
     # Current 14 fields a,b,c,d,e,f,g,i,j,k,n,o,p,q for a new fixed template:
     # null, carbs, null, null, calories, fat, null, true, Integer(0),
