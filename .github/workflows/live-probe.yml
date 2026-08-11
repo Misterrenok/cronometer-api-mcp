@@ -15,4 +15,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
       - name: Probe deployed MCP
-        run: uv run python scripts/live_mcp_probe.py
+        run: uv run python scripts/live_mcp_probe.py | tee live-probe.txt
+      - name: Upload probe artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-mcp-probe
+          path: live-probe.txt
+          if-no-files-found: warn
+          retention-days: 1
