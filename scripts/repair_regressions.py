@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Apply small compatibility repairs to the repository source."""
+
 from pathlib import Path
 
 
