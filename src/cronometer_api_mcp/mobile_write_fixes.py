@@ -1,18 +1,21 @@
-"""Runtime fixes that prefer Cronometer's mobile REST API for biometric writes.
+"""Verified mobile-write fixes for Cronometer API regressions.
 
-The old web-GWT addBiometric payload is stale for several metric types and can
-silently create Weight instead.  This module replaces the internal composite
-writer with a mobile-REST implementation that accepts a write only after the
-mobile diary shows the expected metric ID. Unexpected writes are rolled back.
+The pinned web-GWT client has two stale write paths in the current Cronometer
+backend: several biometric types can silently become Weight, and saved macro
+templates can return transport success without persisting.  This module routes
+those operations through the mobile REST API and accepts success only after a
+read-back verifies the exact object that was requested.
 """
 from __future__ import annotations
 
 from datetime import date
+from types import MethodType
 
 from . import hybrid_tools as hybrid
 from . import server as core
 
 _ORIGINAL_ADD = hybrid._add_biometric_verified
+_ORIGINAL_GET_WEB_CLIENT = hybrid._get_web_client
 
 _UNIT_IDS = {
     "heart_rate": {"bpm": 5},
@@ -56,13 +59,12 @@ def _rollback(rows: list[dict]) -> None:
 
 
 def _try_mobile_add(
-    metric: str,
     metric_id: int,
     stored_value: float,
     day: date,
     unit_id: int,
 ) -> tuple[dict | None, list[str]]:
-    """Try conservative current/mobile payload shapes, verifying each attempt."""
+    """Try conservative mobile biometric payload shapes and verify each one."""
     mobile = core._get_client()
     before_ids = {
         str(row.get("biometricId")) for row in hybrid._mobile_biometric_rows(day)
@@ -81,10 +83,22 @@ def _try_mobile_add(
     }
 
     attempts = [
-        ("/api/v2/add_biometric", {"biometric": biometric, "config": {"call_version": 2}}),
-        ("/api/v2/add_biometric", {"data": biometric, "config": {"call_version": 2}}),
-        ("/api/v2/add_biometric", {**biometric, "config": {"call_version": 2}}),
-        ("/api/v2/add_measurement", {"biometric": biometric, "config": {"call_version": 2}}),
+        (
+            "/api/v2/add_biometric",
+            {"biometric": biometric, "config": {"call_version": 2}},
+        ),
+        (
+            "/api/v2/add_biometric",
+            {"data": biometric, "config": {"call_version": 2}},
+        ),
+        (
+            "/api/v2/add_biometric",
+            {**biometric, "config": {"call_version": 2}},
+        ),
+        (
+            "/api/v2/add_measurement",
+            {"biometric": biometric, "config": {"call_version": 2}},
+        ),
     ]
     errors: list[str] = []
 
@@ -127,7 +141,7 @@ def add_biometric_verified(
         return _ORIGINAL_ADD(metric_type, value, day, unit)
 
     unit_id = _unit_id(metric, unit)
-    row, errors = _try_mobile_add(metric, expected_metric_id, stored_value, day, unit_id)
+    row, errors = _try_mobile_add(expected_metric_id, stored_value, day, unit_id)
     if row is None:
         raise RuntimeError(
             "No verified mobile biometric write path succeeded for "
@@ -151,7 +165,195 @@ def add_biometric_verified(
     }
 
 
-# Registered MCP functions resolve this module-global helper at call time, so
-# replacing it here fixes both add_biometric and update_biometric without
-# re-registering tools or changing the public schema.
+def _raw_mobile_templates() -> list[dict]:
+    response = core._get_client().get_macro_target_templates()
+    templates = response.get("templates", []) if isinstance(response, dict) else []
+    return [item for item in templates if isinstance(item, dict)]
+
+
+def _template_id(template: dict) -> int | None:
+    for key in ("id", "templateId", "template_id"):
+        value = template.get(key)
+        if isinstance(value, int) and value > 0:
+            return value
+        if isinstance(value, str) and value.isdigit() and int(value) > 0:
+            return int(value)
+    return None
+
+
+def _template_name(template: dict) -> str:
+    for key in ("name", "templateName", "template_name"):
+        value = template.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _number(template: dict, *keys: str) -> float | None:
+    for key in keys:
+        value = template.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+def _template_matches(
+    template: dict,
+    *,
+    name: str,
+    protein_g: float,
+    fat_g: float,
+    carbs_g: float,
+    calories: float,
+) -> bool:
+    if _template_name(template) != name:
+        return False
+    checks = (
+        (_number(template, "protein", "protein_g"), protein_g),
+        (_number(template, "fat", "fat_g"), fat_g),
+        (_number(template, "carbs", "netCarbs", "carbs_g"), carbs_g),
+        (_number(template, "energy", "calories", "kcal"), calories),
+    )
+    for actual, expected in checks:
+        if actual is None:
+            continue
+        if abs(actual - float(expected)) > max(0.05, abs(float(expected)) * 1e-4):
+            return False
+    return True
+
+
+def _delete_template_or_raise(web_client, template: dict) -> None:
+    template_id = _template_id(template)
+    if template_id is None:
+        raise RuntimeError(
+            "A macro template was created with an unknown ID shape and cannot be "
+            f"safely rolled back: {template!r}"
+        )
+    if not web_client.delete_macro_target_template(template_id):
+        raise RuntimeError(f"Could not roll back macro template id={template_id}")
+
+
+def _save_macro_target_template_mobile(
+    web_client,
+    template_name: str,
+    protein_g: float,
+    fat_g: float,
+    carbs_g: float,
+    calories: float,
+) -> int:
+    """Create a saved macro template via mobile REST and verify persistence."""
+    mobile = core._get_client()
+    before = _raw_mobile_templates()
+    before_ids = {_template_id(item) for item in before}
+
+    common = {
+        "id": 0,
+        "name": template_name,
+        "protein": float(protein_g),
+        "fat": float(fat_g),
+        "carbs": float(carbs_g),
+        "grams": True,
+        "macroChoice": 0,
+    }
+    energy_template = {**common, "energy": float(calories)}
+    calories_template = {**common, "calories": float(calories)}
+
+    attempts = [
+        (
+            "/api/v2/add_macro_target_template",
+            {"template": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/add_macro_target_template",
+            {"data": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/add_macro_target_template",
+            {**energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/save_macro_target_template",
+            {"template": energy_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/save_macro_target_template",
+            {"template": calories_template, "config": {"call_version": 1}},
+        ),
+        (
+            "/api/v2/update_macro_target_template",
+            {"template": energy_template, "config": {"call_version": 1}},
+        ),
+    ]
+    errors: list[str] = []
+
+    for endpoint, payload in attempts:
+        try:
+            response = mobile._request(endpoint, payload)
+        except Exception as exc:
+            errors.append(f"{endpoint}: {type(exc).__name__}: {exc}")
+            continue
+
+        after = _raw_mobile_templates()
+        new_templates = [
+            item
+            for item in after
+            if _template_id(item) not in before_ids
+            or (
+                _template_id(item) is None
+                and _template_name(item) == template_name
+                and item not in before
+            )
+        ]
+        matching = [
+            item
+            for item in new_templates
+            if _template_matches(
+                item,
+                name=template_name,
+                protein_g=protein_g,
+                fat_g=fat_g,
+                carbs_g=carbs_g,
+                calories=calories,
+            )
+        ]
+        if matching:
+            chosen = matching[-1]
+            extras = [item for item in new_templates if item is not chosen]
+            for item in extras:
+                _delete_template_or_raise(web_client, item)
+            template_id = _template_id(chosen)
+            if template_id is None:
+                raise RuntimeError(
+                    "Macro template persisted but the mobile response did not expose "
+                    f"a deletable template ID: {chosen!r}"
+                )
+            return template_id
+
+        if new_templates:
+            for item in new_templates:
+                _delete_template_or_raise(web_client, item)
+        errors.append(
+            f"{endpoint}: response={response!r}; no verified saved template appeared"
+        )
+
+    raise RuntimeError(
+        "No verified mobile macro-template write path succeeded; "
+        f"attempts={errors}"
+    )
+
+
+def _patched_get_web_client():
+    client = _ORIGINAL_GET_WEB_CLIENT()
+    if not getattr(client, "_chatgpt_mobile_template_patch", False):
+        client.save_macro_target_template = MethodType(
+            _save_macro_target_template_mobile, client
+        )
+        client._chatgpt_mobile_template_patch = True
+    return client
+
+
+# Registered MCP functions resolve these module globals at call time, so the
+# replacements fix existing public tools without re-registering or changing
+# their schemas.
 hybrid._add_biometric_verified = add_biometric_verified
+hybrid._get_web_client = _patched_get_web_client
