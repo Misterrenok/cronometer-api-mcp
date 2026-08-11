@@ -76,9 +76,7 @@ def test_safe_request_reauthenticates_once_for_explicit_session_failure() -> Non
         ]
     )
 
-    result = mobile_write_fixes._safe_v2_request(
-        client, "/api/v2/test", {"x": 1}
-    )
+    result = mobile_write_fixes._safe_v2_request(client, "/api/v2/test", {"x": 1})
 
     assert result == {"result": "SUCCESS"}
     assert client.invalidations == 1
