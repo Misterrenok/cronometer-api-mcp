@@ -74,17 +74,15 @@ def test_fail_invalidates_token_logs_in_and_retries_once(tmp_path):
     assert state["post"] == 2
 
 
-def test_failure_variant_still_retries(tmp_path):
-    """HTTP 200 + result:"FAILURE" retains the original retry behavior."""
-    client, state = make_client(
-        tmp_path, [SYNTHETIC_FAILURE_BODY, {"result": "SUCCESS", "id": 1}]
-    )
+def test_functional_failure_variant_does_not_relogin(tmp_path):
+    """A non-auth FAILURE is surfaced without destroying a valid session."""
+    client, state = make_client(tmp_path, [SYNTHETIC_FAILURE_BODY])
 
-    result = client._request("/api/v2/get_diary", {})
+    with pytest.raises(CronometerError, match="synthetic"):
+        client._request("/api/v2/get_diary", {})
 
-    assert result == {"result": "SUCCESS", "id": 1}
-    assert state["login"] == 1
-    assert state["post"] == 2
+    assert state["login"] == 0
+    assert state["post"] == 1
 
 
 def test_second_failure_raises(tmp_path):
