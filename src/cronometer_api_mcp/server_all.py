@@ -11,6 +11,7 @@ from . import repeat_control_tools as _repeat_control_tools  # noqa: F401
 from . import repeat_v2_tools as _repeat_v2_tools  # noqa: F401
 from . import export_tools as _export_tools  # noqa: F401
 from . import repeat_diag_tools as _repeat_diag_tools  # noqa: F401
+from . import repeat_v3_patch as _repeat_v3_patch  # noqa: F401
 
 mcp = extended.mcp
 
