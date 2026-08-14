@@ -12,7 +12,7 @@ from . import repeat_v2_tools as _repeat_v2_tools  # noqa: F401
 from . import export_tools as _export_tools  # noqa: F401
 from . import repeat_diag_tools as _repeat_diag_tools  # noqa: F401
 from . import repeat_v3_patch as _repeat_v3_patch  # noqa: F401
-from . import repeat_v4_patch as _repeat_v4_patch  # noqa: F401
+from . import repeat_v5_patch as _repeat_v5_patch  # noqa: F401
 
 mcp = extended.mcp
 
