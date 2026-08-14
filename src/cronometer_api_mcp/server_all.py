@@ -8,6 +8,7 @@ from . import hybrid_tools as _hybrid_tools  # noqa: F401
 from . import mobile_write_fixes as _mobile_write_fixes  # noqa: F401
 from . import gwt_macro_template_fix as _gwt_macro_template_fix  # noqa: F401
 from . import repeat_control_tools as _repeat_control_tools  # noqa: F401
+from . import repeat_v2_tools as _repeat_v2_tools  # noqa: F401
 from . import export_tools as _export_tools  # noqa: F401
 
 mcp = extended.mcp
