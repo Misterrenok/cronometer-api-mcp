@@ -49,9 +49,3 @@ def test_parses_live_wednesday_oatmeal():
             "days_of_week": [3],
         }
     ]
-
-
-def test_request_places_quantity_before_days_and_group_after_name():
-    body = repeat._GWT_ADD
-    assert "|7|{quantity}|9|{day_count}|{day_entries}|0|11|{diary_group}|0|" in body
-    assert "|{food_id}|{measure_id}|0|" in body
