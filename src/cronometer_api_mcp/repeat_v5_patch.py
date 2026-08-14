@@ -63,11 +63,7 @@ def update_repeat_item(
 
         before = repeat._list()
         source = next(
-            (
-                item
-                for item in before
-                if item.get("repeat_item_id") == repeat_item_id
-            ),
+            (item for item in before if item.get("repeat_item_id") == repeat_item_id),
             None,
         )
         if source is None:

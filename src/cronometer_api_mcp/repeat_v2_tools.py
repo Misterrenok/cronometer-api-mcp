@@ -68,7 +68,9 @@ def _client():
     client = hybrid._get_web_client()
     client.authenticate()
     if not client.user_id or not client.nonce:
-        raise RuntimeError("Cronometer web authentication did not provide user_id/nonce")
+        raise RuntimeError(
+            "Cronometer web authentication did not provide user_id/nonce"
+        )
     return client
 
 
@@ -122,7 +124,7 @@ def _parse(raw: str) -> list[dict]:
 
     try:
         strings = json.loads(raw[table_start : table_end + 1])
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return []
     if not isinstance(strings, list):
         return []
@@ -181,9 +183,7 @@ def _parse(raw: str) -> list[dict]:
             continue
         (_, food_id), (_, measure_id), (repeat_pos, repeat_id) = triple
 
-        food_name = (
-            food_names[item_index] if item_index < len(food_names) else ""
-        )
+        food_name = food_names[item_index] if item_index < len(food_names) else ""
         diary_group = None
         days: list[int] = []
         tail = tokens[repeat_pos + 1 : quantity_pos]
@@ -215,12 +215,8 @@ def _parse(raw: str) -> list[dict]:
                     and type_ref == integer_ref
                 ):
                     candidate = tail[count_pos + 2 : count_pos + 2 + count]
-                    if (
-                        len(candidate) == count
-                        and all(
-                            isinstance(day, int) and day in range(7)
-                            for day in candidate
-                        )
+                    if len(candidate) == count and all(
+                        isinstance(day, int) and day in range(7) for day in candidate
                     ):
                         days = [int(day) for day in candidate]
 
@@ -244,7 +240,9 @@ def _list() -> list[dict]:
         raise RuntimeError(f"getRepeatedItems failed: {raw[:300]}")
     items = _parse(raw)
     if "RepeatItem/" in raw and not items:
-        raise RuntimeError("getRepeatedItems returned repeat data that could not be parsed")
+        raise RuntimeError(
+            "getRepeatedItems returned repeat data that could not be parsed"
+        )
     return items
 
 
@@ -298,8 +296,7 @@ def _add(
     before_ids = {
         item["repeat_item_id"]
         for item in before
-        if isinstance(item.get("repeat_item_id"), int)
-        and item["repeat_item_id"] > 0
+        if isinstance(item.get("repeat_item_id"), int) and item["repeat_item_id"] > 0
     }
 
     raw = _rpc(
@@ -309,9 +306,7 @@ def _add(
         day_count=len(days),
         day_entries="|".join(f"10|{day}" for day in days),
         quantity=(
-            str(int(quantity))
-            if float(quantity).is_integer()
-            else str(float(quantity))
+            str(int(quantity)) if float(quantity).is_integer() else str(float(quantity))
         ),
         measure_id=measure_id,
         food_id=food_id,
@@ -342,7 +337,7 @@ def _add(
                 _delete_transport(item["repeat_item_id"])
             except Exception as exc:
                 rollback_errors.append(
-                    f'{item["repeat_item_id"]}: {type(exc).__name__}: {exc}'
+                    f"{item['repeat_item_id']}: {type(exc).__name__}: {exc}"
                 )
         raise RuntimeError(
             "addRepeatItem returned OK but the write was not uniquely verified; "
@@ -401,9 +396,7 @@ def add_repeat_item(
             diary_group,
             days_of_week,
         )
-        return core._ok(
-            {"created": True, "item": item, "backend": "web-gwt-verified"}
-        )
+        return core._ok({"created": True, "item": item, "backend": "web-gwt-verified"})
     except Exception as exc:
         return core._err(exc)
 
@@ -457,11 +450,7 @@ def update_repeat_item(
 
         before = _list()
         source = next(
-            (
-                item
-                for item in before
-                if item.get("repeat_item_id") == repeat_item_id
-            ),
+            (item for item in before if item.get("repeat_item_id") == repeat_item_id),
             None,
         )
         if source is None:

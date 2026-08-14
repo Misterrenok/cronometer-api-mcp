@@ -9,7 +9,7 @@ from cronometer_api_mcp import repeat_v3_patch
 
 
 VALID_WASA = (
-    '//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,'
+    "//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'
@@ -17,7 +17,7 @@ VALID_WASA = (
 )
 
 LEGACY_BROKEN = (
-    '//OK[0,464877,1,845544,1,4,0,1,3,1,1,1.0,2,1,1,'
+    "//OK[0,464877,1,845544,1,4,0,1,3,1,1,1.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'
@@ -58,7 +58,7 @@ def test_legacy_broken_item_recovers_real_repeat_id():
 class FakeClient:
     def __init__(self) -> None:
         created = (
-            '//OK[0,1073268,464877,900001,1,4,0,1,3,1,1,1.0,2,1,1,'
+            "//OK[0,1073268,464877,900001,1,4,0,1,3,1,1,1.0,2,1,1,"
             '["java.util.ArrayList/4159755760",'
             '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
             '"java.lang.Integer/3438268394",'

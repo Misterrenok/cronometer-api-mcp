@@ -7,7 +7,7 @@ from cronometer_api_mcp import repeat_v6_patch  # noqa: F401
 
 
 MONDAY_WASA = (
-    '//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,'
+    "//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'
@@ -15,7 +15,7 @@ MONDAY_WASA = (
 )
 
 WEDNESDAY_OATMEAL = (
-    '//OK[0,1073268,464877,845579,1,4,0,3,3,1,1,2.0,2,1,1,'
+    "//OK[0,1073268,464877,845579,1,4,0,3,3,1,1,2.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'

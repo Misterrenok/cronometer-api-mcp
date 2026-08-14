@@ -8,7 +8,7 @@ from cronometer_api_mcp import repeat_v12_final  # noqa: F401
 
 EMPTY = '//OK[0,1,["java.util.ArrayList/4159755760"],0,7]'
 LUNCH_WEDNESDAY = (
-    '//OK[0,1073268,464877,900123,1,4,1,3,3,1,1,3.0,2,1,1,'
+    "//OK[0,1073268,464877,900123,1,4,1,3,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'

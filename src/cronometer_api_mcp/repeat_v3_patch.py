@@ -66,14 +66,12 @@ def _parse_corrected(raw: str) -> list[dict]:
 
     try:
         strings = json.loads(raw[table_start : table_end + 1])
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return []
     if not isinstance(strings, list):
         return []
 
-    if not any(
-        isinstance(value, str) and "RepeatItem/" in value for value in strings
-    ):
+    if not any(isinstance(value, str) and "RepeatItem/" in value for value in strings):
         return []
 
     integer_ref = next(
@@ -143,9 +141,8 @@ def _parse_corrected(raw: str) -> list[dict]:
 
         day_start = name_pos + 4
         days = tokens[day_start : day_start + day_count]
-        if (
-            len(days) != day_count
-            or not all(isinstance(day, int) and day in range(7) for day in days)
+        if len(days) != day_count or not all(
+            isinstance(day, int) and day in range(7) for day in days
         ):
             continue
 

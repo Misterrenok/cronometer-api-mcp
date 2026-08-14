@@ -67,17 +67,14 @@ def _add(
     before_ids = {
         item["repeat_item_id"]
         for item in before
-        if isinstance(item.get("repeat_item_id"), int)
-        and item["repeat_item_id"] > 0
+        if isinstance(item.get("repeat_item_id"), int) and item["repeat_item_id"] > 0
     }
 
     raw = repeat._rpc(
         repeat._GWT_ADD,
         food_name=name,
         quantity=(
-            str(int(quantity))
-            if float(quantity).is_integer()
-            else str(float(quantity))
+            str(int(quantity)) if float(quantity).is_integer() else str(float(quantity))
         ),
         day_count=len(days),
         day_entries="|".join(f"10|{day}" for day in days),
@@ -111,7 +108,7 @@ def _add(
                 repeat._delete_transport(item["repeat_item_id"])
             except Exception as exc:
                 rollback_errors.append(
-                    f'{item["repeat_item_id"]}: {type(exc).__name__}: {exc}'
+                    f"{item['repeat_item_id']}: {type(exc).__name__}: {exc}"
                 )
         raise RuntimeError(
             "addRepeatItem returned OK but the write was not uniquely verified; "

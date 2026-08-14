@@ -61,7 +61,7 @@ def _extract_string_table(raw: str) -> tuple[list[str], int] | None:
 
     try:
         table = json.loads(raw[table_start : table_end + 1])
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return None
     if not isinstance(table, list) or not all(isinstance(v, str) for v in table):
         return None
@@ -81,11 +81,19 @@ def _parse(raw: str) -> list[dict]:
         return []
 
     array_ref = next(
-        (index + 1 for index, value in enumerate(strings) if value.startswith("java.util.ArrayList/")),
+        (
+            index + 1
+            for index, value in enumerate(strings)
+            if value.startswith("java.util.ArrayList/")
+        ),
         None,
     )
     integer_ref = next(
-        (index + 1 for index, value in enumerate(strings) if value.startswith("java.lang.Integer/")),
+        (
+            index + 1
+            for index, value in enumerate(strings)
+            if value.startswith("java.lang.Integer/")
+        ),
         None,
     )
     if array_ref is None or integer_ref is None:
@@ -117,10 +125,14 @@ def _parse(raw: str) -> list[dict]:
         repeat_id = tokens[name_pos - 2]
         recurrence = tokens[name_pos - 1]
         if not (
-            isinstance(measure_id, int) and measure_id > 0
-            and isinstance(food_id, int) and food_id > 0
-            and isinstance(repeat_id, int) and repeat_id >= 0
-            and isinstance(recurrence, int) and recurrence in range(6)
+            isinstance(measure_id, int)
+            and measure_id > 0
+            and isinstance(food_id, int)
+            and food_id > 0
+            and isinstance(repeat_id, int)
+            and repeat_id >= 0
+            and isinstance(recurrence, int)
+            and recurrence in range(6)
         ):
             continue
 
@@ -155,9 +167,7 @@ def _parse(raw: str) -> list[dict]:
                 day = pairs[offset]
                 type_ref = pairs[offset + 1]
                 if not (
-                    isinstance(day, int)
-                    and day in range(7)
-                    and type_ref == integer_ref
+                    isinstance(day, int) and day in range(7) and type_ref == integer_ref
                 ):
                     valid = False
                     break
