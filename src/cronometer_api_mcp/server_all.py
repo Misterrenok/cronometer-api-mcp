@@ -17,6 +17,7 @@ from . import repeat_v6_patch as _repeat_v6_patch  # noqa: F401
 from . import repeat_v7_patch as _repeat_v7_patch  # noqa: F401
 from . import repeat_v8_patch as _repeat_v8_patch  # noqa: F401
 from . import repeat_v9_source_probe as _repeat_v9_source_probe  # noqa: F401
+from . import repeat_v10_class_probe as _repeat_v10_class_probe  # noqa: F401
 
 mcp = extended.mcp
 
