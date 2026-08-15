@@ -8,6 +8,8 @@ from cronometer_api_mcp import repeat_v2_tools as repeat
 from cronometer_api_mcp import repeat_v3_patch
 
 
+# These captured legacy rows stored a zero/null diary-group key. Under the
+# current DiaryGroup semantics that means Uncategorized, not Breakfast.
 VALID_WASA = (
     "//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
@@ -35,7 +37,8 @@ def test_valid_wasa_maps_measure_food_repeat_in_correct_order():
             "measure_id": 1055762,
             "food_name": "Wasa, Crispbread, Multi Grain",
             "quantity": 3.0,
-            "diary_group": 1,
+            "diary_group": 0,
+            "diary_group_raw": 0,
             "days_of_week": [1],
         }
     ]
@@ -49,7 +52,8 @@ def test_legacy_broken_item_recovers_real_repeat_id():
             "measure_id": 464877,
             "food_name": "Sour dressing, non-butterfat, cultured, filled cream-type",
             "quantity": 1.0,
-            "diary_group": 1,
+            "diary_group": 0,
+            "diary_group_raw": 0,
             "days_of_week": [1],
         }
     ]
@@ -57,8 +61,9 @@ def test_legacy_broken_item_recovers_real_repeat_id():
 
 class FakeClient:
     def __init__(self) -> None:
+        # Breakfast is DiaryGroup index 1 => packed key 1 << 16 = 65536.
         created = (
-            "//OK[0,1073268,464877,900001,1,4,0,1,3,1,1,1.0,2,1,1,"
+            "//OK[0,1073268,464877,900001,1,4,65536,3,1,3,1,1,1.0,2,1,1,"
             '["java.util.ArrayList/4159755760",'
             '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
             '"java.lang.Integer/3438268394",'
@@ -100,5 +105,6 @@ def test_legacy_cached_schema_aliases_food_source_id_to_measure_id(monkeypatch):
     assert payload["status"] == "success"
     assert payload["item"]["food_id"] == 464877
     assert payload["item"]["measure_id"] == 1073268
+    assert payload["item"]["diary_group"] == 1
     add_body = next(body for body in client.bodies if "addRepeatItem" in body)
-    assert "|1|0|464877|1073268|0|" in add_body
+    assert "|3|9|1|10|1|10|65536|11|1|0|464877|1073268|0|" in add_body
