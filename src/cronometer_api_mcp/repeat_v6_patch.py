@@ -1,10 +1,10 @@
 """Correct RepeatItem response-list parsing and request field order.
 
-Current RepeatItem fields are quantity, weekdays, optional Integer diary group,
-food name, enabled, repeat-item id, food id, measure id, optional Time.  The
-web service canonicalizes the four built-in diary groups to internal IDs
--3..-6 (Breakfast..Snacks).  The parser also accepts legacy/default rows where
-the group field was null/zero.
+Cronometer stores a recurring item's diary group as a nullable Integer whose
+value is the same packed sort key used by ``DiaryGroup``.  The current web
+bundle constructs a group with ``c = group_index << 16`` and reads the public
+group index with an arithmetic right shift.  Index 0 is Uncategorized; the
+four standard meal groups are 1..4 (Breakfast..Snacks).
 """
 
 from __future__ import annotations
@@ -27,19 +27,11 @@ repeat._GWT_ADD = (
     "{food_id}|{measure_id}|0|"
 )
 
-_INTERNAL_GROUPS = {-3: 1, -4: 2, -5: 3, -6: 4}
 
-
-def _public_group(raw_group: int, has_integer_type: bool) -> int | None:
-    """Convert Cronometer's wire/internal group value to public 1..4."""
-    if raw_group in _INTERNAL_GROUPS:
-        return _INTERNAL_GROUPS[raw_group]
-    # Older rows produced by the previous patch used null for the group.  A
-    # bare zero therefore means Breakfast/default.  For non-null Integer rows
-    # accept 0..3 too, which is useful if Cronometer stops canonicalizing IDs.
-    if raw_group in range(4):
-        return raw_group + 1
-    return None
+def _public_group(raw_group: int) -> int:
+    """Decode Cronometer's packed DiaryGroup sort key to its group index."""
+    group = raw_group >> 16
+    return group if group >= 0 else 0
 
 
 def _extract_string_table(raw: str) -> tuple[list[str], int] | None:
@@ -161,13 +153,10 @@ def _parse(raw: str) -> list[dict]:
         has_integer_type = (
             group_pos + 1 < len(tokens) and tokens[group_pos + 1] == integer_ref
         )
-        diary_group = _public_group(raw_group, has_integer_type)
-        if diary_group is None:
-            continue
+        diary_group = _public_group(raw_group)
 
         # A non-null java.lang.Integer is returned as ``value, type_ref``.
-        # Rows created by older code may contain null here, represented only
-        # by ``0``. Support both shapes while locating the weekday payload.
+        # Legacy/default rows can contain a null field represented by a bare 0.
         possible_pair_starts = {group_pos + 1}
         if has_integer_type:
             possible_pair_starts.add(group_pos + 2)
@@ -214,6 +203,7 @@ def _parse(raw: str) -> list[dict]:
                 "food_name": names[name_ref],
                 "quantity": float(tokens[quantity_pos]),
                 "diary_group": diary_group,
+                "diary_group_raw": raw_group,
                 "days_of_week": days,
             }
         )
