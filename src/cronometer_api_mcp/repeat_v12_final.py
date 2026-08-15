@@ -2,15 +2,15 @@
 
 Cronometer's current compiled RepeatItem serializer is:
 
-    writeDouble(a)
+    writeDouble(a)   # quantity
     writeObject(b)   # weekday list
-    writeObject(c)   # nullable
+    writeObject(c)   # java.lang.Integer diary group (0-based)
     writeString(d)   # food name
     writeBoolean(e)  # enabled
-    writeInt(f)
-    writeInt(g)
-    writeInt(i)
-    writeObject(j)   # nullable
+    writeInt(f)      # repeat item id (0 for create)
+    writeInt(g)      # food id
+    writeInt(i)      # measure id
+    writeObject(j)   # optional Time (null when omitted)
 
 The write is accepted only after a full getRepeatedItems read-back matches the
 requested food, measure, amount, meal group and weekdays. Any mismatched new
@@ -32,7 +32,7 @@ repeat._GWT_ADD = (
     "I|com.cronometer.shared.repeatitems.RepeatItem/477684891|{nonce}|"
     "java.util.ArrayList/4159755760|java.lang.Integer/3438268394|"
     "{food_name}|1|2|3|4|3|5|6|7|8|{user_id}|7|{quantity}|"
-    "9|{day_count}|{day_entries}|0|11|1|{diary_group_raw}|"
+    "9|{day_count}|{day_entries}|10|{diary_group_raw}|11|1|0|"
     "{food_id}|{measure_id}|0|"
 )
 
