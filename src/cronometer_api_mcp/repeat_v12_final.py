@@ -14,7 +14,8 @@ Cronometer's current compiled RepeatItem serializer is:
 
 The current DiaryGroup constructor stores ``group_index << 16`` in that sort
 key. Index 0 is Uncategorized and the standard meal groups are 1..4:
-Breakfast, Lunch, Dinner, Snacks.
+Breakfast, Lunch, Dinner, Snacks. These packed keys are used for both writes
+and read-back verification.
 
 A create is accepted only after getRepeatedItems read-back matches the
 requested food, measure, amount, meal group and weekdays. Mismatched new rows
