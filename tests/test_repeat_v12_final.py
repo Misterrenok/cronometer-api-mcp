@@ -1,4 +1,4 @@
-"""Regression tests for the final verified RepeatItem serializer mapping."""
+"""Regression tests for the verified RepeatItem serializer mapping."""
 
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ from cronometer_api_mcp import repeat_v12_final  # noqa: F401
 
 
 EMPTY = '//OK[0,1,["java.util.ArrayList/4159755760"],0,7]'
+# Canonical Cronometer Lunch group is -4. The single weekday here is
+# Wednesday=3 and is followed by the java.lang.Integer type reference=3.
 LUNCH_WEDNESDAY = (
-    "//OK[0,1073268,464877,900123,1,4,1,3,3,1,1,3.0,2,1,1,"
+    "//OK[0,1073268,464877,900123,1,4,-4,3,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
     '"com.cronometer.shared.repeatitems.RepeatItem/477684891",'
     '"java.lang.Integer/3438268394",'
@@ -16,7 +18,7 @@ LUNCH_WEDNESDAY = (
 )
 
 
-def test_parser_decodes_zero_based_lunch_group():
+def test_parser_decodes_canonical_lunch_group():
     assert repeat._parse(LUNCH_WEDNESDAY) == [
         {
             "repeat_item_id": 900123,
@@ -50,7 +52,7 @@ class FakeClient:
         raise AssertionError(body)
 
 
-def test_lunch_serializes_boolean_true_then_raw_group_one(monkeypatch):
+def test_lunch_serializes_group_as_integer_object_and_new_id_zero(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(repeat.hybrid, "_get_web_client", lambda: client)
 
@@ -65,9 +67,11 @@ def test_lunch_serializes_boolean_true_then_raw_group_one(monkeypatch):
 
     assert item["diary_group"] == 2
     body = next(body for body in client.bodies if "addRepeatItem" in body)
-    assert "|3|9|1|10|3|0|11|1|1|464877|1073268|0|" in body
+    assert "|3|9|1|10|3|10|1|11|1|0|464877|1073268|0|" in body
 
 
 def test_group_mapping_is_public_one_to_four_to_wire_zero_to_three():
     template = repeat._GWT_ADD
-    assert "|0|11|1|{diary_group_raw}|{food_id}|{measure_id}|0|" in template
+    assert (
+        "|10|{diary_group_raw}|11|1|0|{food_id}|{measure_id}|0|" in template
+    )
