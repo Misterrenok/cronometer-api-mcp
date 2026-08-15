@@ -1,4 +1,4 @@
-"""Temporary live probe for Cronometer RepeatItem serializer/deserializer."""
+"""Temporary live probe for Cronometer RepeatItem field types and UI usage."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ repeat._replace_tool("get_repeated_items")
     }
 )
 def get_repeated_items() -> str:
-    """Temporary diagnostic: inspect current RepeatItem object field usage."""
+    """Temporary diagnostic: inspect current RepeatItem field/UI type usage."""
     try:
         from cronometer_mcp import client as web_module
 
@@ -33,21 +33,24 @@ def get_repeated_items() -> str:
         text = response.text
 
         terms = [
+            "function ouj",
             "function wuj",
             "function yuj",
-            "function zuj",
-            "function Auj",
-            "function Buj",
-            "function Cuj",
-            "function Duj",
-            "function Euj",
-            "function Fuj",
-            "function Guj",
-            "function Huj",
-            "function ouj",
-            "new ouj",
-            "Buj(",
-            "RepeatItem/477684891",
+            "Diary Group",
+            "DiaryGroup",
+            "diaryGroup",
+            "Meal Group",
+            "mealGroup",
+            "Breakfast",
+            "Lunch",
+            "Dinner",
+            "Snacks",
+            "Include time",
+            "Repeat Items",
+            "repeatItem",
+            "RepeatItem",
+            "com.cronometer.shared.entries.models.Time",
+            "com.cronometer.shared.entries.models.Diary",
         ]
         found: dict[str, list[str]] = {}
         for term in terms:
@@ -55,15 +58,15 @@ def get_repeated_items() -> str:
             if not hits:
                 continue
             snippets: list[str] = []
-            for pos in hits[:12]:
-                start = max(0, pos - 1800)
-                end = min(len(text), pos + len(term) + 2200)
+            for pos in hits[:20]:
+                start = max(0, pos - 3500)
+                end = min(len(text), pos + len(term) + 4500)
                 snippets.append(text[start:end])
             found[term] = snippets
 
         return repeat.core._ok(
             {
-                "diagnostic": "temporary-repeat-field-usage",
+                "diagnostic": "temporary-repeat-ui-field-types",
                 "permutation": client.gwt_permutation,
                 "cache_size": len(text),
                 "terms_found": sorted(found),
