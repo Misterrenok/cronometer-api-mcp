@@ -14,7 +14,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
       - name: Install dependencies
         run: uv sync
-      - name: Inspect DiaryGroup implementation
+      - name: Capture DiaryGroup implementation bundles
         run: |
           uv run python - <<'PY'
           import re
@@ -22,6 +22,8 @@ jobs:
           import httpx
 
           base = "https://cronometer.com/cronometer/"
+          out = Path("bundle-capture")
+          out.mkdir(exist_ok=True)
           nocache = httpx.get(base + "cronometer.nocache.js", timeout=30, follow_redirects=True)
           nocache.raise_for_status()
           permutations = list(dict.fromkeys(re.findall(r"='([A-F0-9]{32})'", nocache.text)))
@@ -34,53 +36,38 @@ jobs:
                   main = response.text
                   permutation = candidate
                   match = re.search(r"\$strongName = '([A-F0-9]{32})'", main)
-                  strong = match.group(1) if match else None
+                  strong = match.group(1) if match else candidate
                   break
           if main is None:
               raise RuntimeError("main Cronometer bundle missing")
 
-          needles = [
-              "function dHi", "dHi(", "new dHi", "function bHi", "bHi()",
-              "aHi=", "DiaryGroup", "getDiaryGroup", "getDiaryGroups",
-              "Uncategorized", "Breakfast", "Lunch", "Dinner", "Snacks",
-          ]
-          report = [f"permutation={permutation}", f"strongName={strong}", f"main_size={len(main)}"]
-          for needle in needles:
-              hits = list(re.finditer(re.escape(needle), main))
-              report.append(f"\n### {needle} hits={len(hits)}")
-              for match in hits[:50]:
-                  lo = max(0, match.start() - 7000)
-                  hi = min(len(main), match.end() + 9000)
-                  report.append(f"\n--- pos={match.start()} ---\n{main[lo:hi]}\n--- END ---")
+          (out / "main.cache.js").write_text(main, encoding="utf-8")
+          (out / "metadata.txt").write_text(
+              f"permutation={permutation}\nstrongName={strong}\nmain_size={len(main)}\n",
+              encoding="utf-8",
+          )
 
-          # Also inspect deferred fragments when they mention DiaryGroup or RepeatItem.
-          deferred_hits = 0
-          if strong:
-              for fragment in range(0, 250):
-                  response = httpx.get(
-                      f"{base}deferredjs/{strong}/{fragment}.cache.js",
-                      timeout=5,
-                      follow_redirects=True,
-                  )
-                  if response.status_code != 200:
-                      continue
-                  text = response.text
-                  if "DiaryGroup" not in text and "RepeatItem" not in text:
-                      continue
-                  deferred_hits += 1
-                  report.append(f"\n## FRAGMENT {fragment} size={len(text)}")
-                  for needle in ("DiaryGroup", "RepeatItem", "Breakfast", "Lunch", "Dinner", "Snacks"):
-                      for match in list(re.finditer(re.escape(needle), text))[:30]:
-                          lo = max(0, match.start() - 7000)
-                          hi = min(len(text), match.end() + 9000)
-                          report.append(f"\n--- {needle} pos={match.start()} ---\n{text[lo:hi]}\n--- END ---")
-          report.append(f"\ndeferred_hits={deferred_hits}")
-          Path("diary-group-report.txt").write_text("\n".join(report), encoding="utf-8")
+          saved = []
+          for fragment in range(0, 250):
+              response = httpx.get(
+                  f"{base}deferredjs/{strong}/{fragment}.cache.js",
+                  timeout=5,
+                  follow_redirects=True,
+              )
+              if response.status_code != 200:
+                  continue
+              text = response.text
+              if any(term in text for term in ("DiaryGroup", "RepeatItem", "Breakfast", "Lunch", "Dinner", "Snacks")):
+                  (out / f"fragment-{fragment}.cache.js").write_text(text, encoding="utf-8")
+                  saved.append((fragment, len(text)))
+          with (out / "metadata.txt").open("a", encoding="utf-8") as fh:
+              for fragment, size in saved:
+                  fh.write(f"fragment={fragment} size={size}\n")
           PY
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cronometer-diary-group-inspect
-          path: diary-group-report.txt
+          name: cronometer-diary-group-bundles
+          path: bundle-capture
           if-no-files-found: error
           retention-days: 1
