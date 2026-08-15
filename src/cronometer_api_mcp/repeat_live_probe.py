@@ -1,4 +1,4 @@
-"""Temporary live probe for Cronometer RepeatItem field types and UI usage."""
+"""Temporary live probe for Cronometer DiaryGroup internals."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ repeat._replace_tool("get_repeated_items")
     }
 )
 def get_repeated_items() -> str:
-    """Temporary diagnostic: inspect current RepeatItem field/UI type usage."""
+    """Temporary diagnostic: inspect current DiaryGroup constructors/usages."""
     try:
         from cronometer_mcp import client as web_module
 
@@ -33,24 +33,20 @@ def get_repeated_items() -> str:
         text = response.text
 
         terms = [
-            "function ouj",
-            "function wuj",
-            "function yuj",
-            "Diary Group",
+            "function dHi",
+            "new dHi",
+            "function bHi",
+            "bHi()",
+            "aHi=",
+            "aHi =",
             "DiaryGroup",
-            "diaryGroup",
-            "Meal Group",
-            "mealGroup",
-            "Breakfast",
-            "Lunch",
-            "Dinner",
-            "Snacks",
-            "Include time",
-            "Repeat Items",
-            "repeatItem",
-            "RepeatItem",
-            "com.cronometer.shared.entries.models.Time",
-            "com.cronometer.shared.entries.models.Diary",
+            "getDiaryGroup",
+            "getDiaryGroups",
+            "diaryGroups",
+            "Uncategorized",
+            "Group 6",
+            "Group 7",
+            "Group 8",
         ]
         found: dict[str, list[str]] = {}
         for term in terms:
@@ -58,17 +54,16 @@ def get_repeated_items() -> str:
             if not hits:
                 continue
             snippets: list[str] = []
-            for pos in hits[:20]:
-                start = max(0, pos - 3500)
-                end = min(len(text), pos + len(term) + 4500)
+            for pos in hits[:30]:
+                start = max(0, pos - 5000)
+                end = min(len(text), pos + len(term) + 6000)
                 snippets.append(text[start:end])
             found[term] = snippets
 
         return repeat.core._ok(
             {
-                "diagnostic": "temporary-repeat-ui-field-types",
+                "diagnostic": "temporary-diary-group-internals",
                 "permutation": client.gwt_permutation,
-                "cache_size": len(text),
                 "terms_found": sorted(found),
                 "matches": found,
             }
