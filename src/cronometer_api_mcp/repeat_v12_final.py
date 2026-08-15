@@ -4,7 +4,7 @@ Cronometer's current compiled RepeatItem serializer is:
 
     writeDouble(a)   # quantity
     writeObject(b)   # weekday list
-    writeObject(c)   # java.lang.Integer diary group (0-based)
+    writeObject(c)   # java.lang.Integer packed DiaryGroup sort key
     writeString(d)   # food name
     writeBoolean(e)  # enabled
     writeInt(f)      # repeat item id (0 for create)
@@ -12,9 +12,13 @@ Cronometer's current compiled RepeatItem serializer is:
     writeInt(i)      # measure id
     writeObject(j)   # optional Time (null when omitted)
 
-The write is accepted only after a full getRepeatedItems read-back matches the
-requested food, measure, amount, meal group and weekdays. Any mismatched new
-row is rolled back automatically.
+The current DiaryGroup constructor stores ``group_index << 16`` in that sort
+key. Index 0 is Uncategorized and the standard meal groups are 1..4:
+Breakfast, Lunch, Dinner, Snacks.
+
+A create is accepted only after getRepeatedItems read-back matches the
+requested food, measure, amount, meal group and weekdays. Mismatched new rows
+are rolled back automatically.
 """
 
 from __future__ import annotations
@@ -77,7 +81,7 @@ def _add(
         ),
         day_count=len(days),
         day_entries="|".join(f"10|{day}" for day in days),
-        diary_group_raw=diary_group - 1,
+        diary_group_raw=diary_group << 16,
         food_id=food_id,
         measure_id=measure_id,
     )
@@ -112,11 +116,13 @@ def _add(
                 rollback_errors.append(
                     f"{item['repeat_item_id']}: {type(exc).__name__}: {exc}"
                 )
-        raise RuntimeError(
+        message = (
             "addRepeatItem returned OK but the write was not uniquely verified; "
-            f"candidates={candidates}; raw_get={after_raw[:1200]!r}; "
-            f"rollback_errors={rollback_errors}"
+            f"candidate_count={len(candidates)}"
         )
+        if rollback_errors:
+            message += f"; rollback_errors={rollback_errors}"
+        raise RuntimeError(message)
     return matches[0]
 
 
