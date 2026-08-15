@@ -14,6 +14,7 @@ from . import repeat_v5_patch as _repeat_v5_patch  # noqa: F401
 from . import repeat_v6_patch as _repeat_v6_patch  # noqa: F401
 from . import repeat_v12_final as _repeat_v12_final  # noqa: F401
 from . import repeat_live_probe as _repeat_live_probe  # noqa: F401
+from . import safety_fixes as _safety_fixes  # noqa: F401
 from . import export_tools as _export_tools  # noqa: F401
 
 mcp = extended.mcp
