@@ -9,7 +9,7 @@ from cronometer_api_mcp import repeat_v12_final  # noqa: F401
 EMPTY = '//OK[0,1,["java.util.ArrayList/4159755760"],0,7]'
 # Lunch is DiaryGroup index 2, therefore its packed sort key is 2 << 16.
 # The single weekday here is Wednesday=3 and is followed by the Integer type
-# reference=3.
+# reference=3. This mirrors the current Cronometer web bundle.
 LUNCH_WEDNESDAY = (
     "//OK[0,1073268,464877,900123,1,4,131072,3,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
