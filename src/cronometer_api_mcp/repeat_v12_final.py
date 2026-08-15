@@ -7,15 +7,14 @@ Cronometer's current compiled RepeatItem serializer is:
     writeObject(c)   # nullable
     writeString(d)   # food name
     writeBoolean(e)  # enabled
-    writeInt(f)      # diary group, zero based
-    writeInt(g)      # food id
-    writeInt(i)      # measure id
+    writeInt(f)
+    writeInt(g)
+    writeInt(i)
     writeObject(j)   # nullable
 
-This explains every earlier symptom: the old wrapper wrote diary_group into the
-boolean field, so both 1 and 2 became ``true``, while the actual group int was
-hard-coded to zero (Breakfast).  Public groups remain 1..4 and are serialized
-as 0..3.
+The write is accepted only after a full getRepeatedItems read-back matches the
+requested food, measure, amount, meal group and weekdays. Any mismatched new
+row is rolled back automatically.
 """
 
 from __future__ import annotations
@@ -85,7 +84,10 @@ def _add(
     if not raw.startswith("//OK"):
         raise RuntimeError(f"addRepeatItem failed: {raw[:300]}")
 
-    after = repeat._list()
+    after_raw = repeat._rpc(repeat._GWT_GET)
+    if not after_raw.startswith("//OK"):
+        raise RuntimeError(f"getRepeatedItems verification failed: {after_raw[:300]}")
+    after = repeat._parse(after_raw)
     candidates = [
         item
         for item in after
@@ -112,7 +114,8 @@ def _add(
                 )
         raise RuntimeError(
             "addRepeatItem returned OK but the write was not uniquely verified; "
-            f"candidates={candidates}; rollback_errors={rollback_errors}"
+            f"candidates={candidates}; raw_get={after_raw[:1200]!r}; "
+            f"rollback_errors={rollback_errors}"
         )
     return matches[0]
 
@@ -120,7 +123,6 @@ def _add(
 repeat._add = _add
 mcp = repeat.mcp
 
-# Restore the real list tool after temporary source probes.
 repeat._replace_tool("get_repeated_items")
 
 
