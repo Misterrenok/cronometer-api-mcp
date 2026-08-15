@@ -1,10 +1,9 @@
 """Correct RepeatItem response-list parsing and request field order.
 
-Live read-back showed that the response encodes weekday Integer objects before
-``count, ArrayListRef, quantity``.  The March capture also proves that the
-first RepeatItem scalar in addRepeatItem is quantity (Wasa request=3 and
-read-back quantity=3.0), while the scalar after the food-name reference is the
-meal-group selector.  IDs remain food_id then measure_id in the request.
+Current RepeatItem fields are quantity, weekdays, optional Integer diary group,
+food name, enabled, repeat-item id, food id, measure id, optional Time.  The
+response parser accepts both the current non-null Integer diary-group object
+and legacy/default rows where that field was null.
 """
 
 from __future__ import annotations
@@ -23,7 +22,8 @@ repeat._GWT_ADD = (
     "I|com.cronometer.shared.repeatitems.RepeatItem/477684891|{nonce}|"
     "java.util.ArrayList/4159755760|java.lang.Integer/3438268394|"
     "{food_name}|1|2|3|4|3|5|6|7|8|{user_id}|7|{quantity}|"
-    "9|{day_count}|{day_entries}|0|11|{diary_group}|0|{food_id}|{measure_id}|0|"
+    "9|{day_count}|{day_entries}|10|{diary_group_raw}|11|1|0|"
+    "{food_id}|{measure_id}|0|"
 )
 
 
@@ -61,7 +61,7 @@ def _extract_string_table(raw: str) -> tuple[list[str], int] | None:
 
     try:
         table = json.loads(raw[table_start : table_end + 1])
-    except json.JSONDecodeError, TypeError:
+    except (json.JSONDecodeError, TypeError):
         return None
     if not isinstance(table, list) or not all(isinstance(v, str) for v in table):
         return None
@@ -143,12 +143,16 @@ def _parse(raw: str) -> list[dict]:
         if not isinstance(raw_group, int) or raw_group not in range(4):
             continue
 
-        # Find the first candidate quantity whose immediate prefix is
-        # ``day_count, ArrayListRef`` and whose weekday payload consists of
-        # ``day, IntegerRef`` pairs. This works for one or many weekdays.
+        # A non-null java.lang.Integer is returned as ``value, type_ref``.
+        # Rows created by older code may contain null here, represented only
+        # by ``0``.  Support both shapes while locating the weekday payload.
+        possible_pair_starts = {group_pos + 1}
+        if group_pos + 1 < len(tokens) and tokens[group_pos + 1] == integer_ref:
+            possible_pair_starts.add(group_pos + 2)
+
         quantity_pos = None
         days: list[int] | None = None
-        for qpos in range(group_pos + 5, min(len(tokens), group_pos + 20)):
+        for qpos in range(group_pos + 5, min(len(tokens), group_pos + 22)):
             quantity = tokens[qpos]
             if not isinstance(quantity, (int, float)) or qpos < 2:
                 continue
@@ -158,7 +162,7 @@ def _parse(raw: str) -> list[dict]:
             if not isinstance(count, int) or count not in range(1, 8):
                 continue
             pair_start = qpos - 2 - (2 * count)
-            if pair_start != group_pos + 1:
+            if pair_start not in possible_pair_starts:
                 continue
             pairs = tokens[pair_start : qpos - 2]
             parsed_days: list[int] = []
