@@ -19,7 +19,7 @@ repeat._replace_tool("get_repeated_items")
     }
 )
 def get_repeated_items() -> str:
-    """Temporary diagnostic: inspect the current RepeatItem GWT bundle code."""
+    """Temporary diagnostic: inspect current RepeatItem object field usage."""
     try:
         from cronometer_mcp import client as web_module
 
@@ -35,11 +35,18 @@ def get_repeated_items() -> str:
         terms = [
             "function wuj",
             "function yuj",
-            "function xuj",
-            "function buj",
-            "function cuj",
-            "writeDouble",
-            "addRepeatItem",
+            "function zuj",
+            "function Auj",
+            "function Buj",
+            "function Cuj",
+            "function Duj",
+            "function Euj",
+            "function Fuj",
+            "function Guj",
+            "function Huj",
+            "function ouj",
+            "new ouj",
+            "Buj(",
             "RepeatItem/477684891",
         ]
         found: dict[str, list[str]] = {}
@@ -48,15 +55,15 @@ def get_repeated_items() -> str:
             if not hits:
                 continue
             snippets: list[str] = []
-            for pos in hits[:8]:
-                start = max(0, pos - 1600)
-                end = min(len(text), pos + len(term) + 2000)
+            for pos in hits[:12]:
+                start = max(0, pos - 1800)
+                end = min(len(text), pos + len(term) + 2200)
                 snippets.append(text[start:end])
             found[term] = snippets
 
         return repeat.core._ok(
             {
-                "diagnostic": "temporary-repeat-live-bundle",
+                "diagnostic": "temporary-repeat-field-usage",
                 "permutation": client.gwt_permutation,
                 "cache_size": len(text),
                 "terms_found": sorted(found),
