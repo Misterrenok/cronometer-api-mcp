@@ -6,6 +6,9 @@ from cronometer_api_mcp import repeat_v2_tools as repeat
 from cronometer_api_mcp import repeat_v6_patch  # noqa: F401
 
 
+# These historical captures predate the packed DiaryGroup fix and contain a
+# zero/null group key. Preserve them as parser fixtures, but do not mislabel
+# that legacy value as Breakfast.
 MONDAY_WASA = (
     "//OK[0,1055762,461776,658384,1,4,0,1,3,1,1,3.0,2,1,1,"
     '["java.util.ArrayList/4159755760",'
@@ -31,7 +34,8 @@ def test_parses_captured_monday_wasa():
             "measure_id": 1055762,
             "food_name": "Wasa, Crispbread, Multi Grain",
             "quantity": 3.0,
-            "diary_group": 1,
+            "diary_group": 0,
+            "diary_group_raw": 0,
             "days_of_week": [1],
         }
     ]
@@ -45,7 +49,8 @@ def test_parses_live_wednesday_oatmeal():
             "measure_id": 1073268,
             "food_name": "Oatmeal, Regular or Quick, Dry",
             "quantity": 2.0,
-            "diary_group": 1,
+            "diary_group": 0,
+            "diary_group_raw": 0,
             "days_of_week": [3],
         }
     ]
