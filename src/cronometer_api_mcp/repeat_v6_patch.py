@@ -68,7 +68,7 @@ def _extract_string_table(raw: str) -> tuple[list[str], int] | None:
 
     try:
         table = json.loads(raw[table_start : table_end + 1])
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return None
     if not isinstance(table, list) or not all(isinstance(v, str) for v in table):
         return None

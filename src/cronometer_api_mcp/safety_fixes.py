@@ -19,9 +19,9 @@ _BASE_GET_WEB_CLIENT = hybrid._get_web_client
 
 
 def _close(actual: object, expected: float) -> bool:
-    return isinstance(actual, (int, float)) and abs(float(actual) - float(expected)) <= max(
-        0.05, abs(float(expected)) * 1e-4
-    )
+    return isinstance(actual, (int, float)) and abs(
+        float(actual) - float(expected)
+    ) <= max(0.05, abs(float(expected)) * 1e-4)
 
 
 def _effective_daily_targets(day) -> dict:
@@ -68,7 +68,7 @@ def _find_fast(client, fast_id: int) -> dict | None:
         try:
             if int(value) == int(fast_id):
                 return item
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     return None
 
@@ -224,14 +224,18 @@ def _patched_get_web_client():
     # Keep the original reader available only for diagnostics/tests; normal
     # callers receive the mobile-verified effective values above.
     client._chatgpt_original_get_daily_macro_targets = original_get_daily
-    client.get_daily_macro_targets = MethodType(get_daily_macro_targets_verified, client)
+    client.get_daily_macro_targets = MethodType(
+        get_daily_macro_targets_verified, client
+    )
     client.update_daily_targets = MethodType(update_daily_targets_verified, client)
     client.delete_macro_target_template = MethodType(
         delete_macro_target_template_verified, client
     )
     client.save_macro_schedule = MethodType(save_macro_schedule_verified, client)
     client.delete_fast = MethodType(delete_fast_verified, client)
-    client.cancel_fast_keep_series = MethodType(cancel_fast_keep_series_verified, client)
+    client.cancel_fast_keep_series = MethodType(
+        cancel_fast_keep_series_verified, client
+    )
     client._chatgpt_verified_write_patch = True
     return client
 
