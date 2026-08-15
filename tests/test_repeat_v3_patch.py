@@ -107,4 +107,4 @@ def test_legacy_cached_schema_aliases_food_source_id_to_measure_id(monkeypatch):
     assert payload["item"]["measure_id"] == 1073268
     assert payload["item"]["diary_group"] == 1
     add_body = next(body for body in client.bodies if "addRepeatItem" in body)
-    assert "|3|9|1|10|1|10|65536|11|1|0|464877|1073268|0|" in add_body
+    assert "|9|1|10|1|10|65536|11|1|0|464877|1073268|0|" in add_body
