@@ -2,8 +2,9 @@
 
 Current RepeatItem fields are quantity, weekdays, optional Integer diary group,
 food name, enabled, repeat-item id, food id, measure id, optional Time.  The
-response parser accepts both the current non-null Integer diary-group object
-and legacy/default rows where that field was null.
+web service canonicalizes the four built-in diary groups to internal IDs
+-3..-6 (Breakfast..Snacks).  The parser also accepts legacy/default rows where
+the group field was null/zero.
 """
 
 from __future__ import annotations
@@ -25,6 +26,20 @@ repeat._GWT_ADD = (
     "9|{day_count}|{day_entries}|10|{diary_group_raw}|11|1|0|"
     "{food_id}|{measure_id}|0|"
 )
+
+_INTERNAL_GROUPS = {-3: 1, -4: 2, -5: 3, -6: 4}
+
+
+def _public_group(raw_group: int, has_integer_type: bool) -> int | None:
+    """Convert Cronometer's wire/internal group value to public 1..4."""
+    if raw_group in _INTERNAL_GROUPS:
+        return _INTERNAL_GROUPS[raw_group]
+    # Older rows produced by the previous patch used null for the group.  A
+    # bare zero therefore means Breakfast/default.  For non-null Integer rows
+    # accept 0..3 too, which is useful if Cronometer stops canonicalizing IDs.
+    if raw_group in range(4):
+        return raw_group + 1
+    return None
 
 
 def _extract_string_table(raw: str) -> tuple[list[str], int] | None:
@@ -140,14 +155,21 @@ def _parse(raw: str) -> list[dict]:
         if group_pos >= len(tokens):
             continue
         raw_group = tokens[group_pos]
-        if not isinstance(raw_group, int) or raw_group not in range(4):
+        if not isinstance(raw_group, int):
+            continue
+
+        has_integer_type = (
+            group_pos + 1 < len(tokens) and tokens[group_pos + 1] == integer_ref
+        )
+        diary_group = _public_group(raw_group, has_integer_type)
+        if diary_group is None:
             continue
 
         # A non-null java.lang.Integer is returned as ``value, type_ref``.
         # Rows created by older code may contain null here, represented only
-        # by ``0``.  Support both shapes while locating the weekday payload.
+        # by ``0``. Support both shapes while locating the weekday payload.
         possible_pair_starts = {group_pos + 1}
-        if group_pos + 1 < len(tokens) and tokens[group_pos + 1] == integer_ref:
+        if has_integer_type:
             possible_pair_starts.add(group_pos + 2)
 
         quantity_pos = None
@@ -191,7 +213,7 @@ def _parse(raw: str) -> list[dict]:
                 "measure_id": int(measure_id),
                 "food_name": names[name_ref],
                 "quantity": float(tokens[quantity_pos]),
-                "diary_group": raw_group + 1,
+                "diary_group": diary_group,
                 "days_of_week": days,
             }
         )
